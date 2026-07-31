@@ -268,10 +268,10 @@
 
     function sendOTP() {
       const phone = document.getElementById('phoneNumber').value.trim();
-      if(!appData.allowedNumbers.includes(phone)) {
-        alert("Security Alert: This phone number is not authorized to access the BC Dashboard.");
-        return;
-      }
+      // if(!appData.allowedNumbers.includes(phone)) {
+      //   alert("Security Alert: This phone number is not authorized to access the BC Dashboard.");
+      //   return;
+      // }
       firebase.auth().signInWithPhoneNumber(phone, window.recaptchaVerifier)
         .then((result) => {
           confirmationResult = result;
