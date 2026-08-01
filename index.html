@@ -3,97 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gold BC - Phone Auth</title>
+  <title>Gold BC - Member Portal</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- Firebase SDKs (v9 Compat Mode for script tags) -->
+  <!-- Firebase SDKs (v9 Compat Mode) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 min-h-screen">
 
-  <div class="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
-    <h2 class="text-2xl font-bold mb-4 text-center text-amber-600">Gold BC Member Portal</h2>
-    
-    <!-- Status / Error Banner -->
-    <div id="status-msg" class="hidden mb-4 p-3 rounded text-sm font-medium"></div>
+  <!-- ==================== 1. LOGIN / OTP CARD ==================== -->
+  <div id="login-card" class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-4 text-center text-amber-600">Gold BC Member Portal</h2>
+      
+      <!-- Status / Error Banner -->
+      <div id="status-msg" class="hidden mb-4 p-3 rounded text-sm font-medium"></div>
 
-    <!-- Step 1: Phone Number Input -->
-    <div id="phone-section" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-        <div class="relative">
+      <!-- Step 1: Phone Input -->
+      <div id="phone-section" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
           <input 
             type="tel" 
             id="phone-number" 
             placeholder="9876543210" 
             class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-amber-500 focus:border-amber-500 text-lg"
           />
+          <p class="text-xs text-gray-500 mt-1">Enter 10-digit number. Country code <b>+91</b> will be added automatically.</p>
         </div>
-        <p class="text-xs text-gray-500 mt-1">Enter 10-digit number. Country code <b>+91</b> will be added automatically.</p>
+
+        <div id="recaptcha-container"></div>
+
+        <button 
+          onclick="handleSendOTP()" 
+          id="send-otp-btn"
+          class="w-full bg-amber-600 text-white py-2 rounded font-medium hover:bg-amber-700 transition"
+        >
+          Send Verification Code
+        </button>
       </div>
 
-      <!-- Recaptcha Container -->
-      <div id="recaptcha-container"></div>
+      <!-- Step 2: OTP Input -->
+      <div id="otp-section" class="space-y-4 hidden">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Enter 6-Digit OTP</label>
+          <input 
+            type="text" 
+            id="otp-code" 
+            placeholder="123456" 
+            maxlength="6"
+            class="w-full px-3 py-2 border border-gray-300 rounded text-center text-xl tracking-widest focus:ring-amber-500 focus:border-amber-500"
+          />
+        </div>
 
-      <button 
-        onclick="handleSendOTP()" 
-        id="send-otp-btn"
-        class="w-full bg-amber-600 text-white py-2 rounded font-medium hover:bg-amber-700 transition"
-      >
-        Send Verification Code
-      </button>
-    </div>
-
-    <!-- Step 2: OTP Verification Input (Hidden initially) -->
-    <div id="otp-section" class="space-y-4 hidden">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Enter 6-Digit OTP</label>
-        <input 
-          type="text" 
-          id="otp-code" 
-          placeholder="123456" 
-          maxlength="6"
-          class="w-full px-3 py-2 border border-gray-300 rounded text-center text-xl tracking-widest focus:ring-amber-500 focus:border-amber-500"
-        />
+        <button 
+          onclick="handleVerifyOTP()" 
+          id="verify-otp-btn"
+          class="w-full bg-green-600 text-white py-2 rounded font-medium hover:bg-green-700 transition"
+        >
+          Verify & Sign In
+        </button>
+        
+        <button 
+          onclick="resetForm()" 
+          class="w-full text-sm text-gray-500 hover:underline text-center block"
+        >
+          Change Phone Number
+        </button>
       </div>
-
-      <button 
-        onclick="handleVerifyOTP()" 
-        id="verify-otp-btn"
-        class="w-full bg-green-600 text-white py-2 rounded font-medium hover:bg-green-700 transition"
-      >
-        Verify & Sign In
-      </button>
-      
-      <button 
-        onclick="resetForm()" 
-        class="w-full text-sm text-gray-500 hover:underline text-center block"
-      >
-        Change Phone Number
-      </button>
-    </div>
-
-    <!-- Step 3: Success Screen (Hidden initially) -->
-    <div id="user-profile" class="hidden text-center space-y-4">
-      <div class="p-4 bg-green-50 border border-green-200 rounded text-green-800">
-        <p class="font-bold text-lg">Successfully Authenticated!</p>
-        <p id="user-phone" class="text-base font-semibold mt-2 text-green-900"></p>
-        <p id="user-uid" class="text-xs font-mono mt-1 text-gray-600 break-all"></p>
-      </div>
-      <button 
-        onclick="handleSignOut()" 
-        class="w-full bg-gray-600 text-white py-2 rounded hover:bg-gray-700 transition"
-      >
-        Sign Out
-      </button>
     </div>
   </div>
 
+  <!-- ==================== 2. MEMBER DASHBOARD ==================== -->
+  <div id="dashboard-section" class="hidden min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-amber-600 text-white shadow-lg px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <span class="text-2xl font-black tracking-wider">GOLD BC</span>
+        <span class="text-xs bg-amber-800 px-2 py-0.5 rounded text-amber-100 font-semibold">PORTAL</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <span id="dash-user-phone" class="text-sm font-medium bg-amber-700 px-3 py-1 rounded-full"></span>
+        <button 
+          onclick="handleSignOut()" 
+          class="bg-white text-amber-700 hover:bg-amber-100 text-xs font-bold py-1.5 px-3 rounded transition"
+        >
+          Sign Out
+        </button>
+      </div>
+    </nav>
+
+    <!-- Dashboard Content Container -->
+    <main class="max-w-6xl mx-auto p-6">
+      <!-- Welcome Banner -->
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Welcome to Gold BC Dashboard</h1>
+        <p class="text-gray-600 text-sm mt-1">You are logged in as an authorized member.</p>
+        <p id="dash-user-uid" class="text-xs font-mono text-gray-400 mt-2 break-all"></p>
+      </div>
+
+      <!-- Quick Stats / Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Card 1 -->
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Account Status</p>
+          <p class="text-xl font-bold text-green-600 mt-2">Active Member</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">BC Data Access</p>
+          <p class="text-xl font-bold text-amber-600 mt-2">Authorized</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Security Level</p>
+          <p class="text-xl font-bold text-blue-600 mt-2">Phone Verified</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== JAVASCRIPT ==================== -->
   <script>
-    // 1. Your Updated Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBf3P-b_oJ1q0eSGE84vr4IEOxy7Ouc1jM",
       authDomain: "gold-bc.firebaseapp.com",
@@ -104,22 +140,16 @@
       appId: "1:680447220213:web:22ef4a8ebe02401c9e68bc"
     };
 
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
 
-    // 2. Initialize Invisible Recaptcha Verifier
     window.onload = function() {
       window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response) => {
-          // reCAPTCHA solved
-        }
+        'size': 'invisible'
       });
     };
 
-    // Helper UI Function for Messages
     function showMessage(msg, isError = false) {
       const el = document.getElementById('status-msg');
       el.innerText = msg;
@@ -127,63 +157,38 @@
       el.classList.remove('hidden');
     }
 
-    // Helper Function: Format and auto-prepend +91
     function formatPhoneNumber(input) {
-      // Remove spaces, dashes, and brackets
       let cleaned = input.trim().replace(/[\s\-\(\)]/g, '');
-
       if (!cleaned) return '';
-
-      // If user typed a leading 0 (e.g. 09876543210), strip it
-      if (cleaned.startsWith('0')) {
-        cleaned = cleaned.substring(1);
-      }
-
-      // If user already typed leading +, leave it alone
-      if (cleaned.startsWith('+')) {
-        return cleaned;
-      }
-
-      // Otherwise, automatically prepend +91
+      if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+      if (cleaned.startsWith('+')) return cleaned;
       return '+91' + cleaned;
     }
 
-    // 3. STEP 1: Format Number, Check Allowed List & Send OTP
     async function handleSendOTP() {
       const rawInput = document.getElementById('phone-number').value;
       const phoneNumber = formatPhoneNumber(rawInput);
       
-      // Basic validation: +91 followed by 10 digits
       if (!/^\+91\d{10}$/.test(phoneNumber) && !/^\+\d{10,15}$/.test(phoneNumber)) {
         showMessage("Please enter a valid 10-digit mobile number.", true);
         return;
       }
 
-      showMessage(`Checking authorization for ${phoneNumber}...`);
+      showMessage(`Checking authorization...`);
 
       try {
-        // ✅ New (Pointing to /bc_data/allowedNumbers)
-const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
+        const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
         const allowedData = snapshot.val() || {};
-        
-        // Convert node values to array if saved as object/map
-        const allowedNumbers = Array.isArray(allowedData) 
-          ? allowedData 
-          : Object.values(allowedData);
+        const allowedNumbers = Array.isArray(allowedData) ? allowedData : Object.values(allowedData);
 
-        const isAllowed = allowedNumbers.includes(phoneNumber);
-
-        if (!isAllowed) {
+        if (!allowedNumbers.includes(phoneNumber)) {
           showMessage(`Access Denied: ${phoneNumber} is not on the allowed list.`, true);
           return;
         }
 
-        // B. Send OTP if authorized
         showMessage(`Sending verification code to ${phoneNumber}...`);
-        const appVerifier = window.recaptchaVerifier;
-        window.confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+        window.confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier);
 
-        // C. Update UI for OTP entry
         document.getElementById('phone-section').classList.add('hidden');
         document.getElementById('otp-section').classList.remove('hidden');
         showMessage(`OTP sent successfully to ${phoneNumber}`);
@@ -191,15 +196,12 @@ const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
       } catch (error) {
         console.error("Error sending OTP:", error);
         showMessage(error.message || "Failed to send OTP.", true);
-        
-        // Reset Recaptcha on failure
         if (window.recaptchaVerifier) {
           window.recaptchaVerifier.render().then(widgetId => grecaptcha.reset(widgetId));
         }
       }
     }
 
-    // 4. STEP 2: Verify OTP & Automatically Register/Login
     async function handleVerifyOTP() {
       const otpCode = document.getElementById('otp-code').value.trim();
       if (otpCode.length !== 6) {
@@ -210,16 +212,13 @@ const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
       showMessage("Verifying code...");
 
       try {
-        // A. Verify OTP
         const result = await window.confirmationResult.confirm(otpCode);
         const user = result.user;
 
-        // B. Check if this is a NEW user or existing profile
         const userRef = db.ref(`users/${user.uid}`);
         const userSnapshot = await userRef.once('value');
 
         if (!userSnapshot.exists()) {
-          // ✨ AUTOMATIC USER SIGNUP IN REALTIME DATABASE ✨
           await userRef.set({
             uid: user.uid,
             phoneNumber: user.phoneNumber,
@@ -227,14 +226,8 @@ const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             status: "active"
           });
-          console.log("New user registered automatically in DB:", user.uid);
-          showMessage("Welcome! Account created successfully.");
-        } else {
-          console.log("Existing user logged in:", user.uid);
-          showMessage("Welcome back!");
         }
 
-        // C. Show Authenticated View
         showAuthenticatedUI(user);
 
       } catch (error) {
@@ -243,38 +236,36 @@ const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
       }
     }
 
-    // Show Logged-in Screen
+    // Displays the Dashboard view and hides login card
     function showAuthenticatedUI(user) {
-      document.getElementById('phone-section').classList.add('hidden');
-      document.getElementById('otp-section').classList.add('hidden');
-      document.getElementById('user-profile').classList.remove('hidden');
+      document.getElementById('login-card').classList.add('hidden');
+      document.getElementById('dashboard-section').classList.remove('hidden');
       
-      document.getElementById('user-phone').innerText = user.phoneNumber;
-      document.getElementById('user-uid').innerText = "UID: " + user.uid;
+      document.getElementById('dash-user-phone').innerText = user.phoneNumber;
+      document.getElementById('dash-user-uid').innerText = "UID: " + user.uid;
     }
 
-    // Sign Out
     function handleSignOut() {
       auth.signOut().then(() => {
         resetForm();
-        showMessage("Signed out successfully.");
       });
     }
 
-    // Reset Form
     function resetForm() {
+      document.getElementById('dashboard-section').classList.add('hidden');
+      document.getElementById('login-card').classList.remove('hidden');
       document.getElementById('phone-section').classList.remove('hidden');
       document.getElementById('otp-section').classList.add('hidden');
-      document.getElementById('user-profile').classList.add('hidden');
       document.getElementById('phone-number').value = '';
       document.getElementById('otp-code').value = '';
       document.getElementById('status-msg').classList.add('hidden');
     }
 
-    // Listen for Auth State changes
     auth.onAuthStateChanged((user) => {
       if (user) {
         showAuthenticatedUI(user);
+      } else {
+        resetForm();
       }
     });
   </script>
