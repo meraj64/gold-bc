@@ -24,7 +24,7 @@
       <div id="phoneStep" class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-gray-700 mb-1">Mobile Number</label>
-          <input type="tel" id="phoneNumber" placeholder="8088603842 or +918088603842" class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500">
+          <input type="tel" id="phoneNumber" placeholder="9876543210 or +919876543210" class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500">
           <p class="text-[10px] text-gray-400 mt-1">* 10-digit numbers will automatically add +91</p>
         </div>
         <div id="recaptcha-container"></div>
@@ -163,7 +163,7 @@
           <div>
             <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Phone Numbers</h3>
             <textarea id="editPhones" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-            <p class="text-xs text-gray-500 mt-1">Include country code. One per line. (e.g. +918088603842)</p>
+            <p class="text-xs text-gray-500 mt-1">Include country code. One per line. (e.g. +919876543210)</p>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-gray-700 mb-2">Group Members</h3>
@@ -199,7 +199,7 @@
 
     // --- APP STATE ---
     let appData = {
-      allowedNumbers: ["+918088603842"],
+      allowedNumbers: ["+919876543210"],
       members: ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"],
       schedule: [
         { month: "Jul 2026", beneficiary: "Amir" },
@@ -221,7 +221,7 @@
         const parsed = JSON.parse(localData);
         appData = { ...appData, ...parsed };
         if(!appData.allowedNumbers || appData.allowedNumbers.length === 0) {
-          appData.allowedNumbers = ["+918088603842"];
+          appData.allowedNumbers = ["+919876543210"];
         }
         if(!appData.bills) appData.bills = {};
       }
@@ -245,7 +245,7 @@
         const cloudData = snapshot.val();
         if(cloudData) {
           appData = { ...appData, ...cloudData };
-          if(!appData.allowedNumbers) appData.allowedNumbers = ["+918088603842"];
+          if(!appData.allowedNumbers) appData.allowedNumbers = ["+919876543210"];
           if(!appData.bills) appData.bills = {};
           ensurePaymentStructure();
           renderApp();
