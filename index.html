@@ -197,6 +197,39 @@
     }
     const database = firebase.database();
 
+    // Helper functions to safely handle special characters like '.' in Firebase keys
+    function encodeKeys(obj) {
+      if (typeof obj !== 'object' || obj === null) return obj;
+      if (Array.isArray(obj)) return obj.map(encodeKeys);
+      const newObj = {};
+      for (const key in obj) {
+        const cleanKey = key.replace(/\./g, '_dot_')
+                          .replace(/\#/g, '_hash_')
+                          .replace(/\$/g, '_dollar_')
+                          .replace(/\//g, '_slash_')
+                          .replace(/\[/g, '_lbracket_')
+                          .replace(/\]/g, '_rbracket_');
+        newObj[cleanKey] = encodeKeys(obj[key]);
+      }
+      return newObj;
+    }
+
+    function decodeKeys(obj) {
+      if (typeof obj !== 'object' || obj === null) return obj;
+      if (Array.isArray(obj)) return obj.map(decodeKeys);
+      const newObj = {};
+      for (const key in obj) {
+        const origKey = key.replace(/_dot_/g, '.')
+                           .replace(/_hash_/g, '#')
+                           .replace(/_dollar_/g, '$')
+                           .replace(/_slash_/g, '/')
+                           .replace(/_lbracket_/g, '[')
+                           .replace(/_rbracket_/g, ']');
+        newObj[origKey] = decodeKeys(obj[key]);
+      }
+      return newObj;
+    }
+
     // --- APP STATE ---
     let appData = {
       allowedNumbers: ["+919876543210"],
@@ -242,8 +275,9 @@
 
     function loadCloudData() {
       database.ref('bc_data').on('value', (snapshot) => {
-        const cloudData = snapshot.val();
-        if(cloudData) {
+        const rawData = snapshot.val();
+        if(rawData) {
+          const cloudData = decodeKeys(rawData);
           appData = { ...appData, ...cloudData };
           if(!appData.allowedNumbers) appData.allowedNumbers = ["+919876543210"];
           if(!appData.bills) appData.bills = {};
@@ -257,7 +291,7 @@
     function saveData() {
       localStorage.setItem("goldBcData", JSON.stringify(appData));
       if(database && firebase.auth().currentUser) {
-        database.ref('bc_data').set(appData);
+        database.ref('bc_data').set(encodeKeys(appData));
       }
     }
 
