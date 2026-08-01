@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Secure Gold BC Manager</title>
 
-  <!-- Emoji Favicon (Fixes 404 Error) -->
+  <!-- Emoji Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
 
   <!-- Tailwind CSS CDN -->
@@ -29,58 +29,20 @@
       <!-- Status / Error Banner -->
       <div id="status-msg" class="hidden mb-4 p-3 rounded text-sm font-medium"></div>
 
-      <!-- Step 1: Phone Input -->
-      <div id="phoneStep" class="space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Mobile Number</label>
-          <input 
-            type="tel" 
-            id="phoneNumber" 
-            placeholder="9876543210" 
-            class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500"
-          >
-          <p class="text-[10px] text-gray-400 mt-1">Enter 10-digit number. Country code <b>+91</b> will be added automatically.</p>
-        </div>
-
-        <div id="recaptcha-container"></div>
-
-        <button 
-          onclick="sendOTP()" 
-          id="send-otp-btn"
-          class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg hover:bg-amber-700 transition"
-        >
-          Send Verification Code
-        </button>
-      </div>
-
-      <!-- Step 2: OTP Input -->
-      <div id="otpStep" class="space-y-4 hidden">
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Enter 6-Digit OTP</label>
-          <input 
-            type="text" 
-            id="otpCode" 
-            placeholder="123456" 
-            maxlength="6"
-            class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500 text-center tracking-widest"
-          >
-        </div>
-
-        <button 
-          onclick="verifyOTP()" 
-          id="verify-otp-btn"
-          class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition"
-        >
-          Verify & Sign In
-        </button>
-        
-        <button 
-          onclick="resetAuth()" 
-          class="w-full text-sm text-gray-500 hover:underline text-center block mt-2"
-        >
-          Change Phone Number
-        </button>
-      </div>
+      <!-- Google Sign-In Button -->
+      <button 
+        onclick="googleSignIn()" 
+        id="google-signin-btn"
+        class="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-50 transition shadow-sm"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        Sign in with Google
+      </button>
     </div>
   </div>
 
@@ -208,17 +170,29 @@
             <p class="text-sm text-amber-800 font-semibold">🔒 Read-Only Mode: Admin privileges required to edit settings.</p>
           </div>
         </div>
+
+        <!-- Disable New Signups Toggle Option -->
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-amber-900">Disable New Sign-ups</h3>
+            <p class="text-xs text-amber-700">When enabled, new users will be prevented from signing up with Google.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="disableSignupsToggle" class="sr-only peer">
+            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+          </label>
+        </div>
         
         <div class="grid md:grid-cols-2 gap-6">
           <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Admin Phone Numbers</h3>
-            <textarea id="editAdmins" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-            <p class="text-xs text-gray-500 mt-1">Only these numbers can edit configurations. Include country code (e.g. +918088603842)</p>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Admin Emails</h3>
+            <textarea id="editAdmins" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono" placeholder="admin@example.com"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Only these email addresses can edit configurations. One per line.</p>
           </div>
           <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Phone Numbers (All Members)</h3>
-            <textarea id="editPhones" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-            <p class="text-xs text-gray-500 mt-1">Include country code. One per line. (e.g. +918088603842)</p>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Emails (All Members)</h3>
+            <textarea id="editEmails" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono" placeholder="member@example.com"></textarea>
+            <p class="text-xs text-gray-500 mt-1">One per line. (Leave blank to allow any registered Google user).</p>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-gray-700 mb-2">Group Members</h3>
@@ -289,8 +263,9 @@
 
     // --- APP STATE ---
     let appData = {
-      admins: ["+918088603842"],
-      allowedNumbers: ["+918088603842"],
+      disableSignups: false,
+      admins: [],
+      allowedEmails: [],
       members: ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"],
       schedule: [
         { month: "Jul 2026", beneficiary: "Amir" },
@@ -302,43 +277,27 @@
       bills: {}
     };
     
-    let confirmationResult = null;
     let currentMonthIndex = 0;
-    let currentUserPhone = "";
+    let currentUserEmail = "";
 
     // --- INITIALIZATION ---
     window.onload = () => {
-      setupRecaptcha();
-
-      auth.onAuthStateChanged((user) => {
+      auth.onAuthStateChanged(async (user) => {
         if (user) {
-          currentUserPhone = user.phoneNumber || "";
-          document.getElementById('authScreen').classList.add('hidden');
-          document.getElementById('mainApp').classList.remove('hidden');
-          loadCloudData();
+          currentUserEmail = user.email || "";
+          
+          const allowed = await checkUserSignupAllowed(user);
+          if (allowed) {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            loadCloudData();
+          }
         } else {
           document.getElementById('authScreen').classList.remove('hidden');
           document.getElementById('mainApp').classList.add('hidden');
         }
       });
     };
-
-    function setupRecaptcha() {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 
-          'size': 'invisible',
-          'expired-callback': () => {
-            if (window.grecaptcha && window.recaptchaWidgetId !== undefined) {
-              grecaptcha.reset(window.recaptchaWidgetId);
-            }
-          }
-        });
-
-        window.recaptchaVerifier.render().then((widgetId) => {
-          window.recaptchaWidgetId = widgetId;
-        });
-      }
-    }
 
     function showMessage(msg, isError = false) {
       const el = document.getElementById('status-msg');
@@ -347,103 +306,68 @@
       el.classList.remove('hidden');
     }
 
-    function formatPhoneNumber(input) {
-      let cleaned = input.trim().replace(/[\s\-\(\)]/g, '');
-      if (!cleaned) return '';
-      if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
-      if (cleaned.startsWith('+')) return cleaned;
-      return '+91' + cleaned;
-    }
-
-    // --- AUTHENTICATION FLOW ---
-    async function sendOTP() {
-      const rawInput = document.getElementById('phoneNumber').value;
-      const phoneNumber = formatPhoneNumber(rawInput);
-      
-      if (!/^\+91\d{10}$/.test(phoneNumber) && !/^\+\d{10,15}$/.test(phoneNumber)) {
-        showMessage("Please enter a valid 10-digit mobile number.", true);
-        return;
-      }
-
-      showMessage(`Checking authorization for ${phoneNumber}...`);
-
+    // --- SIGN-UP RESTRICTION CHECK ---
+    async function checkUserSignupAllowed(user) {
       try {
-        // Fetch allowed numbers from database
-        const snapshot = await database.ref('bc_data/allowedNumbers').once('value');
-        const allowedData = snapshot.val() || appData.allowedNumbers;
-        const allowedNumbers = Array.isArray(allowedData) ? allowedData : Object.values(allowedData);
+        const settingsSnap = await database.ref('bc_data/disableSignups').once('value');
+        const isSignupDisabled = settingsSnap.val() === true;
 
-        if (!allowedNumbers.includes(phoneNumber)) {
-          showMessage(`Access Denied: ${phoneNumber} is not on the authorized member list.`, true);
-          return;
-        }
-
-        showMessage(`Sending verification code to ${phoneNumber}...`);
-        
-        setupRecaptcha();
-
-        confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier);
-
-        document.getElementById('phoneStep').classList.add('hidden');
-        document.getElementById('otpStep').classList.remove('hidden');
-        showMessage(`OTP sent successfully to ${phoneNumber}`);
-
-      } catch (error) {
-        console.error("Error sending OTP:", error);
-        showMessage(error.message || "Failed to send OTP. Please try again.", true);
-        
-        if (window.grecaptcha && window.recaptchaWidgetId !== undefined) {
-          grecaptcha.reset(window.recaptchaWidgetId);
-        }
-      }
-    }
-
-    async function verifyOTP() {
-      const otpCode = document.getElementById('otpCode').value.trim();
-      if (otpCode.length !== 6) {
-        showMessage("Please enter a valid 6-digit OTP code.", true);
-        return;
-      }
-
-      showMessage("Verifying code...");
-
-      try {
-        const result = await confirmationResult.confirm(otpCode);
-        const user = result.user;
-
-        // Auto-Register user in database if new
         const userRef = database.ref(`users/${user.uid}`);
         const userSnapshot = await userRef.once('value');
 
+        // Check if new user
         if (!userSnapshot.exists()) {
+          if (isSignupDisabled) {
+            showMessage("Access Denied: New user sign-ups are currently disabled by the admin.", true);
+            await auth.signOut();
+            return false;
+          }
+
+          // Check against authorized email list if configured
+          const snapEmails = await database.ref('bc_data/allowedEmails').once('value');
+          const allowedEmails = snapEmails.val();
+          if (allowedEmails) {
+            const list = Array.isArray(allowedEmails) ? allowedEmails : Object.values(allowedEmails);
+            if (list.length > 0 && !list.map(e => e.toLowerCase()).includes((user.email || "").toLowerCase())) {
+              showMessage(`Access Denied: ${user.email} is not on the authorized email list.`, true);
+              await auth.signOut();
+              return false;
+            }
+          }
+
+          // Register new user record in Realtime Database
           await userRef.set({
             uid: user.uid,
-            phoneNumber: user.phoneNumber,
+            email: user.email || "",
             role: "member",
             createdAt: firebase.database.ServerValue.TIMESTAMP,
             status: "active"
           });
         }
+        return true;
+      } catch (err) {
+        console.error("Auth restriction check error:", err);
+        return true;
+      }
+    }
 
+    // --- AUTHENTICATION FLOW ---
+    async function googleSignIn() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try {
+        showMessage("Signing in with Google...");
+        await auth.signInWithPopup(provider);
       } catch (error) {
-        console.error("Verification failed:", error);
-        showMessage("Invalid OTP code. Please try again.", true);
+        console.error("Google Sign-In Error:", error);
+        showMessage(error.message || "Google sign-in failed.", true);
       }
     }
 
     function logout() {
       auth.signOut().then(() => {
-        resetAuth();
+        document.getElementById('status-msg').classList.add('hidden');
         showMessage("Logged out successfully.");
       });
-    }
-
-    function resetAuth() {
-      document.getElementById('phoneStep').classList.remove('hidden');
-      document.getElementById('otpStep').classList.add('hidden');
-      document.getElementById('phoneNumber').value = '';
-      document.getElementById('otpCode').value = '';
-      document.getElementById('status-msg').classList.add('hidden');
     }
 
     // --- DATA SYNC ---
@@ -454,8 +378,10 @@
           const cloudData = decodeKeys(rawData);
           appData = { ...appData, ...cloudData };
         }
-        if (!appData.allowedNumbers) appData.allowedNumbers = ["+918088603842"];
-        if (!appData.admins) appData.admins = [appData.allowedNumbers[0]];
+        if (!appData.allowedEmails) appData.allowedEmails = [];
+        if (!appData.admins || appData.admins.length === 0) {
+          if (currentUserEmail) appData.admins = [currentUserEmail];
+        }
         if (!appData.bills) appData.bills = {};
 
         ensurePaymentStructure();
@@ -473,9 +399,9 @@
     }
 
     function isUserAdmin() {
-      if (!currentUserPhone) return true;
+      if (!currentUserEmail) return true;
       if (!appData.admins || appData.admins.length === 0) return true;
-      return appData.admins.includes(currentUserPhone);
+      return appData.admins.map(a => a.toLowerCase()).includes(currentUserEmail.toLowerCase());
     }
 
     function checkAdminAccess() {
@@ -485,7 +411,7 @@
       const roleBadge = document.getElementById('userRoleBadge');
       
       if (roleBadge) {
-        roleBadge.innerText = isAdmin ? `Logged in as Admin (${currentUserPhone})` : `Logged in as Member (${currentUserPhone})`;
+        roleBadge.innerText = isAdmin ? `Logged in as Admin (${currentUserEmail})` : `Logged in as Member (${currentUserEmail})`;
       }
 
       const settingsInputs = document.querySelectorAll('#tab-settings textarea, #tab-settings input');
@@ -693,8 +619,9 @@
 
     // --- SETTINGS LOGIC ---
     function populateSettings() {
+      document.getElementById('disableSignupsToggle').checked = !!appData.disableSignups;
       document.getElementById('editAdmins').value = (appData.admins || []).join('\n');
-      document.getElementById('editPhones').value = (appData.allowedNumbers || []).join('\n');
+      document.getElementById('editEmails').value = (appData.allowedEmails || []).join('\n');
       document.getElementById('editMembers').value = (appData.members || []).join('\n');
       document.getElementById('editSchedule').value = (appData.schedule || []).map(s => `${s.month} = ${s.beneficiary}`).join('\n');
     }
@@ -705,17 +632,11 @@
         return;
       }
 
-      const parsePhoneList = (val) => val.split('\n').map(l => {
-        let p = l.trim();
-        if (p && !p.startsWith('+')) {
-          p = p.replace(/\D/g, '');
-          if (p.length === 10) p = '+91' + p;
-        }
-        return p;
-      }).filter(l => l);
+      const parseEmailList = (val) => val.split('\n').map(l => l.trim().toLowerCase()).filter(l => l);
 
-      appData.admins = parsePhoneList(document.getElementById('editAdmins').value);
-      appData.allowedNumbers = parsePhoneList(document.getElementById('editPhones').value);
+      appData.disableSignups = document.getElementById('disableSignupsToggle').checked;
+      appData.admins = parseEmailList(document.getElementById('editAdmins').value);
+      appData.allowedEmails = parseEmailList(document.getElementById('editEmails').value);
       appData.members = document.getElementById('editMembers').value.split('\n').map(m => m.trim()).filter(m => m);
       
       appData.schedule = document.getElementById('editSchedule').value.split('\n').map(line => {
