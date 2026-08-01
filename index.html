@@ -110,7 +110,7 @@
           <button onclick="generateReminderSMS()" class="px-3 py-1 bg-blue-500 text-white rounded text-xs font-semibold hover:bg-blue-600">Reminder</button>
           <button onclick="generateEndSMS()" class="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700">End SMS</button>
         </div>
-        <textarea id="smsOutput" rows="4" class="w-full border rounded-lg p-2 bg-gray-50 text-xs font-mono" readonly></textarea>
+        <textarea id="smsOutput" rows="5" class="w-full border rounded-lg p-2 bg-gray-50 text-xs font-mono" readonly placeholder="Click a template button above to generate a message..."></textarea>
       </div>
     </div>
 
@@ -197,7 +197,7 @@
     }
     const database = firebase.database();
 
-    // Helper functions to safely handle special characters like '.' in Firebase keys
+    // Helper functions to safely handle forbidden characters in Firebase keys
     function encodeKeys(obj) {
       if (typeof obj !== 'object' || obj === null) return obj;
       if (Array.isArray(obj)) return obj.map(encodeKeys);
@@ -545,9 +545,67 @@
     }
 
     // --- SMS GENERATORS ---
-    function generateStartSMS() { document.getElementById('smsOutput').value = "Month started message copied!"; }
-    function generateReminderSMS() { document.getElementById('smsOutput').value = "Reminder message copied!"; }
-    function generateEndSMS() { document.getElementById('smsOutput').value = "End message copied!"; }
+    function generateStartSMS() {
+      const monthObj = appData.schedule[currentMonthIndex];
+      const monthKey = monthObj.month;
+      const ben = monthObj.beneficiary;
+      const amount = appData.targetAmount.toLocaleString('en-IN');
+
+      const msg = `🪙 GOLD BC COLLECTION STARTED\n` +
+                  `Month: ${monthKey}\n` +
+                  `Beneficiary: ${ben}\n` +
+                  `Amount per member: ₹${amount}\n\n` +
+                  `Please transfer your contribution via UPI or Cash as soon as possible. Thank you!`;
+
+      document.getElementById('smsOutput').value = msg;
+    }
+
+    function generateReminderSMS() {
+      const monthObj = appData.schedule[currentMonthIndex];
+      const monthKey = monthObj.month;
+      const amount = appData.targetAmount.toLocaleString('en-IN');
+      
+      // Find members who haven't paid yet
+      const pendingMembers = appData.members.filter(m => {
+        return !appData.payments[monthKey] || !appData.payments[monthKey][m]?.paid;
+      });
+
+      if (pendingMembers.length === 0) {
+        document.getElementById('smsOutput').value = `🎉 All members have paid for ${monthKey}! No pending reminders.`;
+        return;
+      }
+
+      const msg = `⚠️ GOLD BC PAYMENT REMINDER\n` +
+                  `Month: ${monthKey}\n` +
+                  `Amount: ₹${amount}\n\n` +
+                  `Pending Members (${pendingMembers.length}):\n` +
+                  pendingMembers.map((m, i) => `${i + 1}. ${m}`).join('\n') + `\n\n` +
+                  `Kindly clear your payment at the earliest.`;
+
+      document.getElementById('smsOutput').value = msg;
+    }
+
+    function generateEndSMS() {
+      const monthObj = appData.schedule[currentMonthIndex];
+      const monthKey = monthObj.month;
+      const ben = monthObj.beneficiary;
+      const bill = appData.bills[monthKey] || 0;
+
+      let paidCount = 0;
+      appData.members.forEach(m => {
+        if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) paidCount++;
+      });
+      const collected = paidCount * appData.targetAmount;
+
+      const msg = `✅ GOLD BC MONTHLY SUMMARY\n` +
+                  `Month: ${monthKey}\n` +
+                  `Beneficiary: ${ben}\n` +
+                  `Total Collected: ₹${collected.toLocaleString('en-IN')} (${paidCount}/${appData.members.length} paid)\n` +
+                  (bill > 0 ? `Actual Gold Bill: ₹${bill.toLocaleString('en-IN')}\n` : '') +
+                  `Thank you everyone!`;
+
+      document.getElementById('smsOutput').value = msg;
+    }
   </script>
 </body>
 </html>
