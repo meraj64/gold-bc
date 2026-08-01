@@ -42,14 +42,14 @@
     </div>
   </div>
 
-  <!-- MAIN APPLICATION (Hidden until logged in) -->
+  <!-- MAIN APPLICATION -->
   <div id="mainApp" class="hidden max-w-5xl mx-auto space-y-6 p-4 md:p-8">
     
     <!-- App Header & Navigation -->
     <div class="bg-amber-600 text-white p-4 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
       <div>
         <h1 class="text-xl font-bold">🪙 Gold Savings BC</h1>
-        <p class="text-amber-100 text-xs">Connected securely via Firebase</p>
+        <p class="text-amber-100 text-xs" id="userRoleBadge">Connected securely via Firebase</p>
       </div>
       <div class="flex gap-2">
         <button onclick="switchTab('tracker')" class="nav-btn bg-amber-800 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-900" data-tab="tracker">Tracker</button>
@@ -157,12 +157,25 @@
     <!-- TAB 3: SETTINGS -->
     <div id="tab-settings" class="tab-content hidden space-y-6">
       <div class="bg-white p-6 rounded-2xl shadow border space-y-6">
-        <h2 class="font-bold text-xl text-gray-800">⚙️ Configuration & Security</h2>
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-xl text-gray-800">⚙️ Configuration & Security</h2>
+        </div>
+
+        <div id="adminNotice" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
+          <div class="flex items-center">
+            <p class="text-sm text-amber-800 font-semibold">🔒 Read-Only Mode: Admin privileges required to edit settings.</p>
+          </div>
+        </div>
         
         <div class="grid md:grid-cols-2 gap-6">
           <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Phone Numbers</h3>
-            <textarea id="editPhones" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Admin Phone Numbers</h3>
+            <textarea id="editAdmins" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Only these numbers can edit configurations. Include country code (e.g. +919876543210)</p>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Phone Numbers (All Members)</h3>
+            <textarea id="editPhones" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
             <p class="text-xs text-gray-500 mt-1">Include country code. One per line. (e.g. +919876543210)</p>
           </div>
           <div>
@@ -170,11 +183,11 @@
             <textarea id="editMembers" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
           </div>
           <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Monthly Schedule (Month = Name)</h3>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Monthly Schedule (Month = Beneficiary)</h3>
             <textarea id="editSchedule" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
           </div>
         </div>
-        <button onclick="saveSettings()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700">Save All Configurations</button>
+        <button id="saveSettingsBtn" onclick="saveSettings()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition">Save All Configurations</button>
       </div>
     </div>
   </div>
@@ -197,7 +210,7 @@
     }
     const database = firebase.database();
 
-    // Helper functions to safely handle forbidden characters in Firebase keys
+    // Helper functions for safe Firebase key encoding
     function encodeKeys(obj) {
       if (typeof obj !== 'object' || obj === null) return obj;
       if (Array.isArray(obj)) return obj.map(encodeKeys);
@@ -232,6 +245,7 @@
 
     // --- APP STATE ---
     let appData = {
+      admins: ["+919876543210"],
       allowedNumbers: ["+919876543210"],
       members: ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"],
       schedule: [
@@ -246,22 +260,31 @@
     
     let confirmationResult = null;
     let currentMonthIndex = 0;
+    let currentUserPhone = "";
 
     // --- INITIALIZATION ---
     window.onload = () => {
       const localData = localStorage.getItem("goldBcData");
-      if(localData) {
-        const parsed = JSON.parse(localData);
-        appData = { ...appData, ...parsed };
-        if(!appData.allowedNumbers || appData.allowedNumbers.length === 0) {
-          appData.allowedNumbers = ["+919876543210"];
-        }
-        if(!appData.bills) appData.bills = {};
+      if (localData) {
+        try {
+          const parsed = JSON.parse(localData);
+          appData = { ...appData, ...parsed };
+        } catch(e) { console.error(e); }
       }
-      
-      // Setup Auth Listener
+
+      if (!appData.allowedNumbers || appData.allowedNumbers.length === 0) {
+        appData.allowedNumbers = ["+919876543210"];
+      }
+      if (!appData.admins || appData.admins.length === 0) {
+        appData.admins = [appData.allowedNumbers[0]];
+      }
+      if (!appData.bills) appData.bills = {};
+
+      ensurePaymentStructure();
+
       firebase.auth().onAuthStateChanged((user) => {
         if (user) {
+          currentUserPhone = user.phoneNumber || "";
           document.getElementById('authScreen').classList.add('hidden');
           document.getElementById('mainApp').classList.remove('hidden');
           loadCloudData();
@@ -276,40 +299,79 @@
     function loadCloudData() {
       database.ref('bc_data').on('value', (snapshot) => {
         const rawData = snapshot.val();
-        if(rawData) {
+        if (rawData) {
           const cloudData = decodeKeys(rawData);
           appData = { ...appData, ...cloudData };
-          if(!appData.allowedNumbers) appData.allowedNumbers = ["+919876543210"];
-          if(!appData.bills) appData.bills = {};
-          ensurePaymentStructure();
-          renderApp();
-          generateAnalytics();
         }
+        if (!appData.allowedNumbers) appData.allowedNumbers = ["+919876543210"];
+        if (!appData.admins) appData.admins = [appData.allowedNumbers[0]];
+        if (!appData.bills) appData.bills = {};
+
+        ensurePaymentStructure();
+        renderApp();
+        generateAnalytics();
+        checkAdminAccess();
       });
     }
 
     function saveData() {
       localStorage.setItem("goldBcData", JSON.stringify(appData));
-      if(database && firebase.auth().currentUser) {
+      if (database && firebase.auth().currentUser) {
         database.ref('bc_data').set(encodeKeys(appData));
+      }
+    }
+
+    function isUserAdmin() {
+      if (!currentUserPhone) return true;
+      if (!appData.admins || appData.admins.length === 0) return true;
+      return appData.admins.includes(currentUserPhone);
+    }
+
+    function checkAdminAccess() {
+      const isAdmin = isUserAdmin();
+      const adminNotice = document.getElementById('adminNotice');
+      const saveBtn = document.getElementById('saveSettingsBtn');
+      const roleBadge = document.getElementById('userRoleBadge');
+      
+      if (roleBadge) {
+        roleBadge.innerText = isAdmin ? `Logged in as Admin (${currentUserPhone})` : `Logged in as Member (${currentUserPhone})`;
+      }
+
+      const settingsInputs = document.querySelectorAll('#tab-settings textarea, #tab-settings input');
+
+      if (!isAdmin) {
+        if (adminNotice) adminNotice.classList.remove('hidden');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.className = "w-full bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed";
+          saveBtn.innerText = "🔒 Admin Privileges Required to Save";
+        }
+        settingsInputs.forEach(el => el.disabled = true);
+      } else {
+        if (adminNotice) adminNotice.classList.add('hidden');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.className = "w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition";
+          saveBtn.innerText = "Save All Configurations";
+        }
+        settingsInputs.forEach(el => el.disabled = false);
       }
     }
 
     // --- AUTHENTICATION LOGIC ---
     function setupRecaptcha() {
-      if(!window.recaptchaVerifier) {
+      if (!window.recaptchaVerifier) {
         window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
       }
     }
 
     function sendOTP() {
       let rawPhone = document.getElementById('phoneNumber').value.trim();
-      if(!rawPhone) {
+      if (!rawPhone) {
         alert("Please enter a phone number.");
         return;
       }
 
-      // Automatically add +91 if not included
       let phone = rawPhone.replace(/[\s-]/g, '');
       if (!phone.startsWith('+')) {
         const digits = phone.replace(/\D/g, '');
@@ -320,8 +382,7 @@
         }
       }
 
-      // Security check
-      if(!appData.allowedNumbers.includes(phone)) {
+      if (!appData.allowedNumbers.includes(phone)) {
         alert(`Security Alert: Phone number (${phone}) is not authorized to access this BC Dashboard.`);
         return;
       }
@@ -364,16 +425,23 @@
       });
       document.querySelector(`[data-tab="${tabId}"]`).classList.replace('bg-amber-700', 'bg-amber-800');
 
-      if(tabId === 'settings') populateSettings();
-      if(tabId === 'analytics') generateAnalytics();
+      if (tabId === 'settings') {
+        populateSettings();
+        checkAdminAccess();
+      }
+      if (tabId === 'analytics') generateAnalytics();
     }
 
     // --- TRACKER LOGIC ---
     function ensurePaymentStructure() {
+      if (!appData.schedule || !Array.isArray(appData.schedule)) appData.schedule = [];
+      if (!appData.members || !Array.isArray(appData.members)) appData.members = [];
+      if (!appData.payments) appData.payments = {};
+
       appData.schedule.forEach(s => {
-        if(!appData.payments[s.month]) appData.payments[s.month] = {};
+        if (!appData.payments[s.month]) appData.payments[s.month] = {};
         appData.members.forEach(m => {
-          if(!appData.payments[s.month][m]) appData.payments[s.month][m] = { paid: false, mode: 'UPI' };
+          if (!appData.payments[s.month][m]) appData.payments[s.month][m] = { paid: false, mode: 'UPI' };
         });
       });
     }
@@ -381,6 +449,8 @@
     function renderApp() {
       const select = document.getElementById('monthSelect');
       select.innerHTML = '';
+      if (!appData.schedule || appData.schedule.length === 0) return;
+
       appData.schedule.forEach((s, i) => {
         select.innerHTML += `<option value="${i}" data-month="${s.month}" data-ben="${s.beneficiary}">${s.month} - ${s.beneficiary}</option>`;
       });
@@ -390,7 +460,9 @@
     }
 
     function switchMonth() {
-      currentMonthIndex = document.getElementById('monthSelect').value;
+      currentMonthIndex = document.getElementById('monthSelect').value || 0;
+      if (!appData.schedule[currentMonthIndex]) return;
+
       const monthKey = appData.schedule[currentMonthIndex].month;
       
       document.getElementById('targetAmount').value = appData.targetAmount || 0;
@@ -401,11 +473,17 @@
     }
 
     function updateTrackerUI() {
+      if (!appData.schedule[currentMonthIndex]) return;
       const monthKey = appData.schedule[currentMonthIndex].month;
       const tbody = document.getElementById('memberList');
       tbody.innerHTML = '';
 
+      if (!appData.payments[monthKey]) appData.payments[monthKey] = {};
+
       appData.members.forEach((m, i) => {
+        if (!appData.payments[monthKey][m]) {
+          appData.payments[monthKey][m] = { paid: false, mode: 'UPI' };
+        }
         const pData = appData.payments[monthKey][m];
         tbody.innerHTML += `
           <tr class="border-b text-sm">
@@ -427,13 +505,15 @@
 
     function updateStats() {
       appData.targetAmount = parseFloat(document.getElementById('targetAmount').value) || 0;
+      if (!appData.schedule[currentMonthIndex]) return;
+
       const monthKey = appData.schedule[currentMonthIndex].month;
       const bill = parseFloat(document.getElementById('actualBill').value) || 0;
       appData.bills[monthKey] = bill;
 
       const totalTarget = appData.targetAmount * appData.members.length;
       let paidCount = 0;
-      appData.members.forEach(m => { if(appData.payments[monthKey] && appData.payments[monthKey][m].paid) paidCount++; });
+      appData.members.forEach(m => { if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) paidCount++; });
 
       const collected = paidCount * appData.targetAmount;
       const diff = bill > 0 ? bill - collected : 0;
@@ -472,8 +552,8 @@
         
         let monthCollected = 0;
         appData.members.forEach(m => {
-          const p = appData.payments[mKey][m];
-          if(p.paid) {
+          const p = appData.payments[mKey]?.[m] || { paid: false, mode: 'UPI' };
+          if (p.paid) {
             monthCollected += appData.targetAmount;
             memberStats[m].paid++;
             p.mode === 'Cash' ? memberStats[m].cash++ : memberStats[m].upi++;
@@ -483,7 +563,7 @@
         });
         
         totalCollected += monthCollected;
-        if(appData.bills[mKey]) totalBills += appData.bills[mKey];
+        if (appData.bills[mKey]) totalBills += appData.bills[mKey];
       });
 
       const progress = Math.round((totalCollected / (appData.targetAmount * appData.members.length * appData.schedule.length)) * 100) || 0;
@@ -495,8 +575,8 @@
       
       const diffEl = document.getElementById('anaNetDiff');
       diffEl.innerText = `₹${Math.abs(netDiff).toLocaleString('en-IN')}`;
-      if(netDiff > 0) diffEl.classList.replace('text-purple-900', 'text-red-600');
-      else if(netDiff < 0) diffEl.classList.replace('text-purple-900', 'text-green-600');
+      if (netDiff > 0) diffEl.className = "text-3xl font-black text-red-600 mt-2";
+      else if (netDiff < 0) diffEl.className = "text-3xl font-black text-green-600 mt-2";
 
       const tbody = document.getElementById('analyticsTableBody');
       tbody.innerHTML = '';
@@ -516,26 +596,34 @@
 
     // --- SETTINGS LOGIC ---
     function populateSettings() {
-      document.getElementById('editPhones').value = appData.allowedNumbers.join('\n');
-      document.getElementById('editMembers').value = appData.members.join('\n');
-      document.getElementById('editSchedule').value = appData.schedule.map(s => `${s.month} = ${s.beneficiary}`).join('\n');
+      document.getElementById('editAdmins').value = (appData.admins || []).join('\n');
+      document.getElementById('editPhones').value = (appData.allowedNumbers || []).join('\n');
+      document.getElementById('editMembers').value = (appData.members || []).join('\n');
+      document.getElementById('editSchedule').value = (appData.schedule || []).map(s => `${s.month} = ${s.beneficiary}`).join('\n');
     }
 
     function saveSettings() {
-      appData.allowedNumbers = document.getElementById('editPhones').value.split('\n').map(l => {
+      if (!isUserAdmin()) {
+        alert("Access Denied: You must be an admin to save settings.");
+        return;
+      }
+
+      const parsePhoneList = (val) => val.split('\n').map(l => {
         let p = l.trim();
-        if(p && !p.startsWith('+')) {
+        if (p && !p.startsWith('+')) {
           p = p.replace(/\D/g, '');
-          if(p.length === 10) p = '+91' + p;
+          if (p.length === 10) p = '+91' + p;
         }
         return p;
       }).filter(l => l);
 
+      appData.admins = parsePhoneList(document.getElementById('editAdmins').value);
+      appData.allowedNumbers = parsePhoneList(document.getElementById('editPhones').value);
       appData.members = document.getElementById('editMembers').value.split('\n').map(m => m.trim()).filter(m => m);
       
       appData.schedule = document.getElementById('editSchedule').value.split('\n').map(line => {
         const p = line.split('=');
-        if(p.length === 2) return { month: p[0].trim(), beneficiary: p[1].trim() };
+        if (p.length === 2) return { month: p[0].trim(), beneficiary: p[1].trim() };
       }).filter(s => s);
 
       ensurePaymentStructure();
@@ -551,10 +639,8 @@
       const ben = monthObj.beneficiary;
       const amount = appData.targetAmount;
 
-      // Extract month name (e.g., "Jul" from "Jul 2026")
       const monthName = monthKey.split(' ')[0];
 
-      // Check for Surplus from Previous Month
       let surplusNote = "";
       if (currentMonthIndex > 0) {
         const prevObj = appData.schedule[currentMonthIndex - 1];
@@ -570,7 +656,6 @@
         }
         const prevCollected = prevPaidCount * amount;
 
-        // Surplus occurs when collected > actual bill
         if (prevBill > 0 && prevCollected > prevBill) {
           const surplus = prevCollected - prevBill;
           const prevTotal = amount + surplus;
