@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Secure Gold BC Manager</title>
+
+  <!-- Emoji Favicon (Fixes 404 Error) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -322,7 +326,16 @@
     function setupRecaptcha() {
       if (!window.recaptchaVerifier) {
         window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 
-          'size': 'invisible' 
+          'size': 'invisible',
+          'expired-callback': () => {
+            if (window.grecaptcha && window.recaptchaWidgetId !== undefined) {
+              grecaptcha.reset(window.recaptchaWidgetId);
+            }
+          }
+        });
+
+        window.recaptchaVerifier.render().then((widgetId) => {
+          window.recaptchaWidgetId = widgetId;
         });
       }
     }
@@ -366,6 +379,9 @@
         }
 
         showMessage(`Sending verification code to ${phoneNumber}...`);
+        
+        setupRecaptcha();
+
         confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier);
 
         document.getElementById('phoneStep').classList.add('hidden');
@@ -375,8 +391,9 @@
       } catch (error) {
         console.error("Error sending OTP:", error);
         showMessage(error.message || "Failed to send OTP. Please try again.", true);
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.render().then(widgetId => grecaptcha.reset(widgetId));
+        
+        if (window.grecaptcha && window.recaptchaWidgetId !== undefined) {
+          grecaptcha.reset(window.recaptchaWidgetId);
         }
       }
     }
