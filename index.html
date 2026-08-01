@@ -162,8 +162,8 @@
       showMessage(`Checking authorization for ${phoneNumber}...`);
 
       try {
-        // A. Verify if number exists in /allowedNumbers node
-        const snapshot = await db.ref('allowedNumbers').once('value');
+        // ✅ New (Pointing to /bc_data/allowedNumbers)
+const snapshot = await db.ref('bc_data/allowedNumbers').once('value');
         const allowedData = snapshot.val() || {};
         
         // Convert node values to array if saved as object/map
