@@ -123,7 +123,7 @@
           <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
             <h3 class="text-xs font-bold text-blue-500 uppercase tracking-wider">Overall Progress</h3>
             <p class="text-3xl font-black text-blue-900 mt-2" id="anaProgress">0%</p>
-            <p class="text-xs text-blue-600 mt-1" id="anaMonthsDone">0/10 Months Completed</p>
+            <p class="text-xs text-blue-600 mt-1" id="anaMonthsDone">0 Completed</p>
           </div>
           <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
             <h3 class="text-xs font-bold text-emerald-500 uppercase tracking-wider">Total Cash Flow</h3>
@@ -210,7 +210,7 @@
     }
     const database = firebase.database();
 
-    // Helper functions for safe Firebase key encoding
+    // Helper functions for safe Firebase key encoding/decoding
     function encodeKeys(obj) {
       if (typeof obj !== 'object' || obj === null) return obj;
       if (Array.isArray(obj)) return obj.map(encodeKeys);
@@ -243,9 +243,17 @@
       return newObj;
     }
 
+    // Helper to safely convert Firebase objects back into Arrays
+    function toArray(val) {
+      if (!val) return [];
+      if (Array.isArray(val)) return val.filter(Boolean);
+      if (typeof val === 'object') return Object.values(val).filter(Boolean);
+      return [];
+    }
+
     // --- APP STATE ---
     let appData = {
-      admins: ["+918088603842"],
+      admins: ["+919876543210"],
       allowedNumbers: ["+919876543210"],
       members: ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"],
       schedule: [
@@ -272,21 +280,16 @@
         } catch(e) { console.error(e); }
       }
 
-      if (!appData.allowedNumbers || appData.allowedNumbers.length === 0) {
-        appData.allowedNumbers = ["+919876543210"];
-      }
-      if (!appData.admins || appData.admins.length === 0) {
-        appData.admins = [appData.allowedNumbers[0]];
-      }
-      if (!appData.bills) appData.bills = {};
-
       ensurePaymentStructure();
+      renderApp();
+      generateAnalytics();
 
       firebase.auth().onAuthStateChanged((user) => {
         if (user) {
           currentUserPhone = user.phoneNumber || "";
           document.getElementById('authScreen').classList.add('hidden');
           document.getElementById('mainApp').classList.remove('hidden');
+          checkAdminAccess();
           loadCloudData();
         } else {
           document.getElementById('authScreen').classList.remove('hidden');
@@ -303,10 +306,7 @@
           const cloudData = decodeKeys(rawData);
           appData = { ...appData, ...cloudData };
         }
-        if (!appData.allowedNumbers) appData.allowedNumbers = ["+919876543210"];
-        if (!appData.admins) appData.admins = [appData.allowedNumbers[0]];
-        if (!appData.bills) appData.bills = {};
-
+        
         ensurePaymentStructure();
         renderApp();
         generateAnalytics();
@@ -323,8 +323,9 @@
 
     function isUserAdmin() {
       if (!currentUserPhone) return true;
-      if (!appData.admins || appData.admins.length === 0) return true;
-      return appData.admins.includes(currentUserPhone);
+      const adminList = toArray(appData.admins);
+      if (adminList.length === 0) return true;
+      return adminList.includes(currentUserPhone);
     }
 
     function checkAdminAccess() {
@@ -382,7 +383,8 @@
         }
       }
 
-      if (!appData.allowedNumbers.includes(phone)) {
+      const allowed = toArray(appData.allowedNumbers);
+      if (allowed.length > 0 && !allowed.includes(phone)) {
         alert(`Security Alert: Phone number (${phone}) is not authorized to access this BC Dashboard.`);
         return;
       }
@@ -434,14 +436,31 @@
 
     // --- TRACKER LOGIC ---
     function ensurePaymentStructure() {
-      if (!appData.schedule || !Array.isArray(appData.schedule)) appData.schedule = [];
-      if (!appData.members || !Array.isArray(appData.members)) appData.members = [];
-      if (!appData.payments) appData.payments = {};
+      appData.schedule = toArray(appData.schedule);
+      appData.members = toArray(appData.members);
+      appData.allowedNumbers = toArray(appData.allowedNumbers);
+      appData.admins = toArray(appData.admins);
+
+      if (appData.schedule.length === 0) {
+        appData.schedule = [
+          { month: "Jul 2026", beneficiary: "Amir" },
+          { month: "Aug 2026", beneficiary: "Tahfeem 2" }
+        ];
+      }
+      if (appData.members.length === 0) {
+        appData.members = ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"];
+      }
+
+      if (!appData.payments || typeof appData.payments !== 'object') appData.payments = {};
 
       appData.schedule.forEach(s => {
+        if (!s || !s.month) return;
         if (!appData.payments[s.month]) appData.payments[s.month] = {};
         appData.members.forEach(m => {
-          if (!appData.payments[s.month][m]) appData.payments[s.month][m] = { paid: false, mode: 'UPI' };
+          if (!m) return;
+          if (!appData.payments[s.month][m]) {
+            appData.payments[s.month][m] = { paid: false, mode: 'UPI' };
+          }
         });
       });
     }
@@ -454,19 +473,31 @@
       appData.schedule.forEach((s, i) => {
         select.innerHTML += `<option value="${i}" data-month="${s.month}" data-ben="${s.beneficiary}">${s.month} - ${s.beneficiary}</option>`;
       });
+
+      if (currentMonthIndex >= appData.schedule.length) {
+        currentMonthIndex = 0;
+      }
       select.value = currentMonthIndex;
       
       switchMonth();
     }
 
     function switchMonth() {
-      currentMonthIndex = document.getElementById('monthSelect').value || 0;
-      if (!appData.schedule[currentMonthIndex]) return;
+      const select = document.getElementById('monthSelect');
+      if (select.value !== "") {
+        currentMonthIndex = parseInt(select.value, 10);
+      }
+      if (isNaN(currentMonthIndex) || !appData.schedule[currentMonthIndex]) {
+        currentMonthIndex = 0;
+      }
 
-      const monthKey = appData.schedule[currentMonthIndex].month;
+      const monthObj = appData.schedule[currentMonthIndex];
+      if (!monthObj) return;
+
+      const monthKey = monthObj.month;
       
       document.getElementById('targetAmount').value = appData.targetAmount || 0;
-      document.getElementById('actualBill').value = appData.bills[monthKey] || 0;
+      document.getElementById('actualBill').value = (appData.bills && appData.bills[monthKey]) ? appData.bills[monthKey] : 0;
       
       updateTrackerUI();
       updateStats();
@@ -509,6 +540,7 @@
 
       const monthKey = appData.schedule[currentMonthIndex].month;
       const bill = parseFloat(document.getElementById('actualBill').value) || 0;
+      if (!appData.bills) appData.bills = {};
       appData.bills[monthKey] = bill;
 
       const totalTarget = appData.targetAmount * appData.members.length;
@@ -543,15 +575,18 @@
       let totalExpected = 0;
       let memberStats = {};
 
-      appData.members.forEach(m => memberStats[m] = { paid: 0, pending: 0, cash: 0, upi: 0 });
+      const members = toArray(appData.members);
+      const schedule = toArray(appData.schedule);
 
-      appData.schedule.forEach(s => {
+      members.forEach(m => memberStats[m] = { paid: 0, pending: 0, cash: 0, upi: 0 });
+
+      schedule.forEach(s => {
         const mKey = s.month;
-        const monthExpected = appData.targetAmount * appData.members.length;
+        const monthExpected = appData.targetAmount * members.length;
         totalExpected += monthExpected;
         
         let monthCollected = 0;
-        appData.members.forEach(m => {
+        members.forEach(m => {
           const p = appData.payments[mKey]?.[m] || { paid: false, mode: 'UPI' };
           if (p.paid) {
             monthCollected += appData.targetAmount;
@@ -563,14 +598,15 @@
         });
         
         totalCollected += monthCollected;
-        if (appData.bills[mKey]) totalBills += appData.bills[mKey];
+        if (appData.bills && appData.bills[mKey]) totalBills += appData.bills[mKey];
       });
 
-      const progress = Math.round((totalCollected / (appData.targetAmount * appData.members.length * appData.schedule.length)) * 100) || 0;
+      const totalPossible = (appData.targetAmount || 0) * members.length * schedule.length;
+      const progress = totalPossible > 0 ? Math.round((totalCollected / totalPossible) * 100) : 0;
       const netDiff = totalBills > 0 ? totalBills - totalCollected : 0;
 
       document.getElementById('anaProgress').innerText = `${progress}%`;
-      document.getElementById('anaMonthsDone').innerText = `Based on ${appData.schedule.length} scheduled cycles`;
+      document.getElementById('anaMonthsDone').innerText = `Based on ${schedule.length} scheduled cycles`;
       document.getElementById('anaCashFlow').innerText = `₹${totalCollected.toLocaleString('en-IN')}`;
       
       const diffEl = document.getElementById('anaNetDiff');
@@ -580,7 +616,7 @@
 
       const tbody = document.getElementById('analyticsTableBody');
       tbody.innerHTML = '';
-      appData.members.forEach(m => {
+      members.forEach(m => {
         const st = memberStats[m];
         const prefMode = st.cash > st.upi ? 'Cash' : 'UPI';
         tbody.innerHTML += `
@@ -596,10 +632,10 @@
 
     // --- SETTINGS LOGIC ---
     function populateSettings() {
-      document.getElementById('editAdmins').value = (appData.admins || []).join('\n');
-      document.getElementById('editPhones').value = (appData.allowedNumbers || []).join('\n');
-      document.getElementById('editMembers').value = (appData.members || []).join('\n');
-      document.getElementById('editSchedule').value = (appData.schedule || []).map(s => `${s.month} = ${s.beneficiary}`).join('\n');
+      document.getElementById('editAdmins').value = toArray(appData.admins).join('\n');
+      document.getElementById('editPhones').value = toArray(appData.allowedNumbers).join('\n');
+      document.getElementById('editMembers').value = toArray(appData.members).join('\n');
+      document.getElementById('editSchedule').value = toArray(appData.schedule).map(s => `${s.month} = ${s.beneficiary}`).join('\n');
     }
 
     function saveSettings() {
@@ -634,23 +670,26 @@
 
     // --- SMS GENERATORS ---
     function generateStartSMS() {
-      const monthObj = appData.schedule[currentMonthIndex];
+      const schedule = toArray(appData.schedule);
+      if (!schedule[currentMonthIndex]) return;
+
+      const monthObj = schedule[currentMonthIndex];
       const monthKey = monthObj.month;
       const ben = monthObj.beneficiary;
-      const amount = appData.targetAmount;
+      const amount = appData.targetAmount || 0;
 
       const monthName = monthKey.split(' ')[0];
 
       let surplusNote = "";
       if (currentMonthIndex > 0) {
-        const prevObj = appData.schedule[currentMonthIndex - 1];
+        const prevObj = schedule[currentMonthIndex - 1];
         const prevMonthKey = prevObj.month;
         const prevBen = prevObj.beneficiary;
-        const prevBill = appData.bills[prevMonthKey] || 0;
+        const prevBill = (appData.bills && appData.bills[prevMonthKey]) || 0;
 
         let prevPaidCount = 0;
         if (appData.payments[prevMonthKey]) {
-          appData.members.forEach(m => {
+          toArray(appData.members).forEach(m => {
             if (appData.payments[prevMonthKey][m]?.paid) prevPaidCount++;
           });
         }
@@ -680,11 +719,14 @@
     }
 
     function generateReminderSMS() {
-      const monthObj = appData.schedule[currentMonthIndex];
+      const schedule = toArray(appData.schedule);
+      if (!schedule[currentMonthIndex]) return;
+
+      const monthObj = schedule[currentMonthIndex];
       const monthKey = monthObj.month;
-      const amount = appData.targetAmount.toLocaleString('en-IN');
+      const amount = (appData.targetAmount || 0).toLocaleString('en-IN');
       
-      const pendingMembers = appData.members.filter(m => {
+      const pendingMembers = toArray(appData.members).filter(m => {
         return !appData.payments[monthKey] || !appData.payments[monthKey][m]?.paid;
       });
 
@@ -704,21 +746,25 @@
     }
 
     function generateEndSMS() {
-      const monthObj = appData.schedule[currentMonthIndex];
+      const schedule = toArray(appData.schedule);
+      if (!schedule[currentMonthIndex]) return;
+
+      const monthObj = schedule[currentMonthIndex];
       const monthKey = monthObj.month;
       const ben = monthObj.beneficiary;
-      const bill = appData.bills[monthKey] || 0;
+      const bill = (appData.bills && appData.bills[monthKey]) || 0;
+      const members = toArray(appData.members);
 
       let paidCount = 0;
-      appData.members.forEach(m => {
+      members.forEach(m => {
         if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) paidCount++;
       });
-      const collected = paidCount * appData.targetAmount;
+      const collected = paidCount * (appData.targetAmount || 0);
 
       const msg = `✅ GOLD BC MONTHLY SUMMARY\n` +
                   `Month: ${monthKey}\n` +
                   `Beneficiary: ${ben}\n` +
-                  `Total Collected: ₹${collected.toLocaleString('en-IN')} (${paidCount}/${appData.members.length} paid)\n` +
+                  `Total Collected: ₹${collected.toLocaleString('en-IN')} (${paidCount}/${members.length} paid)\n` +
                   (bill > 0 ? `Actual Gold Bill: ₹${bill.toLocaleString('en-IN')}\n` : '') +
                   `Thank you everyone!`;
 
