@@ -3,773 +3,252 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Secure Gold BC Manager</title>
+  <title>Gold BC - Phone Auth</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <!-- Firebase SDKs (v9 Compat Mode for script tags) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
-  <!-- AUTHENTICATION SCREEN -->
-  <div id="authScreen" class="flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-4 border-amber-500">
-      <div class="text-center mb-6">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">🪙 Gold BC Login</h1>
-        <p class="text-sm text-gray-500">Secure member access only.</p>
-      </div>
-
-      <div id="phoneStep" class="space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Mobile Number</label>
-          <input type="tel" id="phoneNumber" placeholder="9876543210 or +919876543210" class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500">
-          <p class="text-[10px] text-gray-400 mt-1">* 10-digit numbers will automatically add +91</p>
-        </div>
-        <div id="recaptcha-container"></div>
-        <button onclick="sendOTP()" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg hover:bg-amber-700 transition">Get OTP</button>
-      </div>
-
-      <div id="otpStep" class="space-y-4 hidden">
-        <div>
-          <label class="block text-xs font-bold text-gray-700 mb-1">Enter OTP</label>
-          <input type="number" id="otpCode" placeholder="123456" class="w-full border-2 rounded-lg p-3 text-lg font-medium outline-none focus:border-amber-500 text-center tracking-widest">
-        </div>
-        <button onclick="verifyOTP()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition">Verify & Login</button>
-        <button onclick="resetAuth()" class="w-full text-sm text-gray-500 mt-2 hover:text-gray-800">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MAIN APPLICATION -->
-  <div id="mainApp" class="hidden max-w-5xl mx-auto space-y-6 p-4 md:p-8">
+  <div class="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-4 text-center text-amber-600">Gold BC Member Portal</h2>
     
-    <!-- App Header & Navigation -->
-    <div class="bg-amber-600 text-white p-4 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+    <!-- Status / Error Banner -->
+    <div id="status-msg" class="hidden mb-4 p-3 rounded text-sm font-medium"></div>
+
+    <!-- Step 1: Phone Number Input -->
+    <div id="phone-section" class="space-y-4">
       <div>
-        <h1 class="text-xl font-bold">🪙 Gold Savings BC</h1>
-        <p class="text-amber-100 text-xs" id="userRoleBadge">Connected securely via Firebase</p>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+        <input 
+          type="tel" 
+          id="phone-number" 
+          placeholder="+919876543210" 
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-amber-500 focus:border-amber-500"
+        />
+        <p class="text-xs text-gray-500 mt-1">Include country code (e.g., +91 for India)</p>
       </div>
-      <div class="flex gap-2">
-        <button onclick="switchTab('tracker')" class="nav-btn bg-amber-800 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-900" data-tab="tracker">Tracker</button>
-        <button onclick="switchTab('analytics')" class="nav-btn bg-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-900" data-tab="analytics">Analytics</button>
-        <button onclick="switchTab('settings')" class="nav-btn bg-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-900" data-tab="settings">Settings</button>
-        <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700">Logout</button>
-      </div>
+
+      <!-- Recaptcha Container -->
+      <div id="recaptcha-container"></div>
+
+      <button 
+        onclick="handleSendOTP()" 
+        id="send-otp-btn"
+        class="w-full bg-amber-600 text-white py-2 rounded hover:bg-amber-700 transition"
+      >
+        Send Verification Code
+      </button>
     </div>
 
-    <!-- TAB 1: TRACKER -->
-    <div id="tab-tracker" class="tab-content space-y-6">
-      <div class="bg-white p-4 rounded-2xl shadow border grid md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 mb-1">CURRENT MONTH</label>
-          <select id="monthSelect" onchange="switchMonth()" class="w-full border rounded-lg p-2 font-medium bg-gray-50"></select>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 mb-1">TARGET PER MEMBER (₹)</label>
-          <input type="number" id="targetAmount" oninput="updateStats(); saveData();" class="w-full border rounded-lg p-2 font-medium">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 mb-1">ACTUAL GOLD BILL (₹)</label>
-          <input type="number" id="actualBill" oninput="updateStats(); saveData();" class="w-full border rounded-lg p-2 font-medium">
-        </div>
+    <!-- Step 2: OTP Verification Input (Hidden initially) -->
+    <div id="otp-section" class="space-y-4 hidden">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Enter 6-Digit OTP</label>
+        <input 
+          type="text" 
+          id="otp-code" 
+          placeholder="123456" 
+          maxlength="6"
+          class="w-full px-3 py-2 border border-gray-300 rounded text-center text-xl tracking-widest focus:ring-amber-500 focus:border-amber-500"
+        />
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Target</p><p class="text-lg font-bold" id="statTarget">₹0</p></div>
-        <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Collected</p><p class="text-lg font-bold text-green-600" id="statCollected">₹0</p></div>
-        <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Pending</p><p class="text-lg font-bold text-red-500" id="statPending">₹0</p></div>
-        <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Deficit / Surplus</p><p class="text-lg font-bold text-amber-600" id="statDiff">₹0</p></div>
-      </div>
-
-      <div class="bg-white rounded-2xl shadow border overflow-hidden">
-        <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-          <h2 class="font-bold text-gray-700">Payment Tracker</h2>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-[500px]">
-            <thead>
-              <tr class="bg-gray-100 text-xs font-semibold text-gray-600">
-                <th class="p-3">Member</th>
-                <th class="p-3">Status</th>
-                <th class="p-3">Mode</th>
-                <th class="p-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody id="memberList"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- SMS Actions -->
-      <div class="bg-white p-4 rounded-2xl shadow border space-y-3">
-        <h2 class="font-bold text-gray-700 text-sm">📱 SMS Templates</h2>
-        <div class="flex flex-wrap gap-2">
-          <button onclick="generateStartSMS()" class="px-3 py-1 bg-amber-500 text-white rounded text-xs font-semibold hover:bg-amber-600">Start SMS</button>
-          <button onclick="generateReminderSMS()" class="px-3 py-1 bg-blue-500 text-white rounded text-xs font-semibold hover:bg-blue-600">Reminder</button>
-          <button onclick="generateEndSMS()" class="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700">End SMS</button>
-        </div>
-        <textarea id="smsOutput" rows="12" class="w-full border rounded-lg p-2 bg-gray-50 text-xs font-mono" readonly placeholder="Click a template button above to generate a message..."></textarea>
-      </div>
+      <button 
+        onclick="handleVerifyOTP()" 
+        id="verify-otp-btn"
+        class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition"
+      >
+        Verify & Sign In
+      </button>
+      
+      <button 
+        onclick="resetForm()" 
+        class="w-full text-sm text-gray-500 hover:underline text-center block"
+      >
+        Change Phone Number
+      </button>
     </div>
 
-    <!-- TAB 2: ANALYTICS -->
-    <div id="tab-analytics" class="tab-content hidden space-y-6">
-      <div class="bg-white p-6 rounded-2xl shadow border">
-        <h2 class="font-bold text-xl text-gray-800 mb-6">📊 BC Lifecycle Analytics</h2>
-        
-        <div class="grid md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
-            <h3 class="text-xs font-bold text-blue-500 uppercase tracking-wider">Overall Progress</h3>
-            <p class="text-3xl font-black text-blue-900 mt-2" id="anaProgress">0%</p>
-            <p class="text-xs text-blue-600 mt-1" id="anaMonthsDone">0 Completed</p>
-          </div>
-          <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-            <h3 class="text-xs font-bold text-emerald-500 uppercase tracking-wider">Total Cash Flow</h3>
-            <p class="text-3xl font-black text-emerald-900 mt-2" id="anaCashFlow">₹0</p>
-            <p class="text-xs text-emerald-600 mt-1">Successfully Collected Across All Rounds</p>
-          </div>
-          <div class="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
-            <h3 class="text-xs font-bold text-purple-500 uppercase tracking-wider">Historical Net Deficit/Surplus</h3>
-            <p class="text-3xl font-black text-purple-900 mt-2" id="anaNetDiff">₹0</p>
-            <p class="text-xs text-purple-600 mt-1">Accumulated across all settled bills</p>
-          </div>
-        </div>
-
-        <h3 class="font-bold text-gray-700 mb-4">🏆 Member Payment Scorecard</h3>
-        <div class="overflow-x-auto border rounded-xl">
-          <table class="w-full text-left">
-            <thead>
-              <tr class="bg-gray-100 text-xs text-gray-600 uppercase tracking-wider">
-                <th class="p-3">Member Name</th>
-                <th class="p-3 text-center">Months Paid</th>
-                <th class="p-3 text-center">Pending Defaults</th>
-                <th class="p-3 text-center">Preferred Mode</th>
-              </tr>
-            </thead>
-            <tbody id="analyticsTableBody" class="text-sm"></tbody>
-          </table>
-        </div>
+    <!-- Step 3: Success Screen (Hidden initially) -->
+    <div id="user-profile" class="hidden text-center space-y-4">
+      <div class="p-4 bg-green-50 border border-green-200 rounded text-green-800">
+        <p class="font-bold">Successfully Authenticated!</p>
+        <p id="user-uid" class="text-xs font-mono mt-1"></p>
+        <p id="user-phone" class="text-sm font-medium mt-1"></p>
       </div>
-    </div>
-
-    <!-- TAB 3: SETTINGS -->
-    <div id="tab-settings" class="tab-content hidden space-y-6">
-      <div class="bg-white p-6 rounded-2xl shadow border space-y-6">
-        <div class="flex justify-between items-center">
-          <h2 class="font-bold text-xl text-gray-800">⚙️ Configuration & Security</h2>
-        </div>
-
-        <div id="adminNotice" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
-          <div class="flex items-center">
-            <p class="text-sm text-amber-800 font-semibold">🔒 Read-Only Mode: Admin privileges required to edit settings.</p>
-          </div>
-        </div>
-        
-        <div class="grid md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Admin Phone Numbers</h3>
-            <textarea id="editAdmins" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-            <p class="text-xs text-gray-500 mt-1">Only these numbers can edit configurations. Include country code (e.g. +919876543210)</p>
-          </div>
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Authorized Phone Numbers (All Members)</h3>
-            <textarea id="editPhones" rows="3" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-            <p class="text-xs text-gray-500 mt-1">Include country code. One per line. (e.g. +919876543210)</p>
-          </div>
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Group Members</h3>
-            <textarea id="editMembers" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-          </div>
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">Monthly Schedule (Month = Beneficiary)</h3>
-            <textarea id="editSchedule" rows="4" class="w-full border rounded p-2 text-sm bg-gray-50 font-mono"></textarea>
-          </div>
-        </div>
-        <button id="saveSettingsBtn" onclick="saveSettings()" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition">Save All Configurations</button>
-      </div>
+      <button 
+        onclick="handleSignOut()" 
+        class="w-full bg-gray-600 text-white py-2 rounded hover:bg-gray-700 transition"
+      >
+        Sign Out
+      </button>
     </div>
   </div>
 
   <script>
-    // 1. FIREBASE CONFIGURATION
+    // 1. Firebase Configuration (Replace with your Firebase Project details)
     const firebaseConfig = {
-      apiKey: "AIzaSyBf3P-b_oJ1q0eSGE84vr4IEOxy7Ouc1jM",
-      authDomain: "gold-bc.firebaseapp.com",
-      databaseURL: "https://gold-bc-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "gold-bc",
-      storageBucket: "gold-bc.firebasestorage.app",
-      messagingSenderId: "680447220213",
-      appId: "1:680447220213:web:22ef4a8ebe02401c9e68bc"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
 
-    // 2. INITIALIZE FIREBASE IMMEDIATELY
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const database = firebase.database();
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
 
-    // Helper functions for safe Firebase key encoding/decoding
-    function encodeKeys(obj) {
-      if (typeof obj !== 'object' || obj === null) return obj;
-      if (Array.isArray(obj)) return obj.map(encodeKeys);
-      const newObj = {};
-      for (const key in obj) {
-        const cleanKey = key.replace(/\./g, '_dot_')
-                          .replace(/\#/g, '_hash_')
-                          .replace(/\$/g, '_dollar_')
-                          .replace(/\//g, '_slash_')
-                          .replace(/\[/g, '_lbracket_')
-                          .replace(/\]/g, '_rbracket_');
-        newObj[cleanKey] = encodeKeys(obj[key]);
-      }
-      return newObj;
-    }
-
-    function decodeKeys(obj) {
-      if (typeof obj !== 'object' || obj === null) return obj;
-      if (Array.isArray(obj)) return obj.map(decodeKeys);
-      const newObj = {};
-      for (const key in obj) {
-        const origKey = key.replace(/_dot_/g, '.')
-                           .replace(/_hash_/g, '#')
-                           .replace(/_dollar_/g, '$')
-                           .replace(/_slash_/g, '/')
-                           .replace(/_lbracket_/g, '[')
-                           .replace(/_rbracket_/g, ']');
-        newObj[origKey] = decodeKeys(obj[key]);
-      }
-      return newObj;
-    }
-
-    // Helper to safely convert Firebase objects back into Arrays
-    function toArray(val) {
-      if (!val) return [];
-      if (Array.isArray(val)) return val.filter(Boolean);
-      if (typeof val === 'object') return Object.values(val).filter(Boolean);
-      return [];
-    }
-
-    // --- APP STATE ---
-    let appData = {
-      admins: ["+919876543210"],
-      allowedNumbers: ["+919876543210"],
-      members: ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"],
-      schedule: [
-        { month: "Jul 2026", beneficiary: "Amir" },
-        { month: "Aug 2026", beneficiary: "Tahfeem 2" }
-      ],
-      targetAmount: 30000,
-      actualBill: 0,
-      payments: {},
-      bills: {}
-    };
-    
-    let confirmationResult = null;
-    let currentMonthIndex = 0;
-    let currentUserPhone = "";
-
-    // --- INITIALIZATION ---
-    window.onload = () => {
-      const localData = localStorage.getItem("goldBcData");
-      if (localData) {
-        try {
-          const parsed = JSON.parse(localData);
-          appData = { ...appData, ...parsed };
-        } catch(e) { console.error(e); }
-      }
-
-      ensurePaymentStructure();
-      renderApp();
-      generateAnalytics();
-
-      firebase.auth().onAuthStateChanged((user) => {
-        if (user) {
-          currentUserPhone = user.phoneNumber || "";
-          document.getElementById('authScreen').classList.add('hidden');
-          document.getElementById('mainApp').classList.remove('hidden');
-          checkAdminAccess();
-          loadCloudData();
-        } else {
-          document.getElementById('authScreen').classList.remove('hidden');
-          document.getElementById('mainApp').classList.add('hidden');
-          setupRecaptcha();
+    // 2. Initialize Invisible Recaptcha Verifier
+    window.onload = function() {
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response) => {
+          // reCAPTCHA solved - allow signInWithPhoneNumber
         }
       });
     };
 
-    function loadCloudData() {
-      database.ref('bc_data').on('value', (snapshot) => {
-        const rawData = snapshot.val();
-        if (rawData) {
-          const cloudData = decodeKeys(rawData);
-          appData = { ...appData, ...cloudData };
-        }
-        
-        ensurePaymentStructure();
-        renderApp();
-        generateAnalytics();
-        checkAdminAccess();
-      });
+    // Helper UI Function for Messages
+    function showMessage(msg, isError = false) {
+      const el = document.getElementById('status-msg');
+      el.innerText = msg;
+      el.className = `mb-4 p-3 rounded text-sm font-medium ${isError ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`;
+      el.classList.remove('hidden');
     }
 
-    function saveData() {
-      localStorage.setItem("goldBcData", JSON.stringify(appData));
-      if (database && firebase.auth().currentUser) {
-        database.ref('bc_data').set(encodeKeys(appData));
-      }
-    }
-
-    function isUserAdmin() {
-      if (!currentUserPhone) return true;
-      const adminList = toArray(appData.admins);
-      if (adminList.length === 0) return true;
-      return adminList.includes(currentUserPhone);
-    }
-
-    function checkAdminAccess() {
-      const isAdmin = isUserAdmin();
-      const adminNotice = document.getElementById('adminNotice');
-      const saveBtn = document.getElementById('saveSettingsBtn');
-      const roleBadge = document.getElementById('userRoleBadge');
+    // 3. STEP 1: Check Allowed List & Send OTP
+    async function handleSendOTP() {
+      const phoneNumber = document.getElementById('phone-number').value.trim();
       
-      if (roleBadge) {
-        roleBadge.innerText = isAdmin ? `Logged in as Admin (${currentUserPhone})` : `Logged in as Member (${currentUserPhone})`;
-      }
-
-      const settingsInputs = document.querySelectorAll('#tab-settings textarea, #tab-settings input');
-
-      if (!isAdmin) {
-        if (adminNotice) adminNotice.classList.remove('hidden');
-        if (saveBtn) {
-          saveBtn.disabled = true;
-          saveBtn.className = "w-full bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed";
-          saveBtn.innerText = "🔒 Admin Privileges Required to Save";
-        }
-        settingsInputs.forEach(el => el.disabled = true);
-      } else {
-        if (adminNotice) adminNotice.classList.add('hidden');
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.className = "w-full bg-emerald-600 text-white font-bold py-3 rounded-lg hover:bg-emerald-700 transition";
-          saveBtn.innerText = "Save All Configurations";
-        }
-        settingsInputs.forEach(el => el.disabled = false);
-      }
-    }
-
-    // --- AUTHENTICATION LOGIC ---
-    function setupRecaptcha() {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
-      }
-    }
-
-    function sendOTP() {
-      let rawPhone = document.getElementById('phoneNumber').value.trim();
-      if (!rawPhone) {
-        alert("Please enter a phone number.");
+      if (!phoneNumber.startsWith('+')) {
+        showMessage("Please include country code starting with '+' (e.g., +91)", true);
         return;
       }
 
-      let phone = rawPhone.replace(/[\s-]/g, '');
-      if (!phone.startsWith('+')) {
-        const digits = phone.replace(/\D/g, '');
-        if (digits.length === 10) {
-          phone = '+91' + digits;
-        } else if (digits.length > 10) {
-          phone = '+' + digits;
-        }
-      }
+      showMessage("Checking authorization...");
 
-      const allowed = toArray(appData.allowedNumbers);
-      if (allowed.length > 0 && !allowed.includes(phone)) {
-        alert(`Security Alert: Phone number (${phone}) is not authorized to access this BC Dashboard.`);
+      try {
+        // A. Verify if number exists in /allowedNumbers database node
+        const snapshot = await db.ref('allowedNumbers').once('value');
+        const allowedData = snapshot.val() || {};
+        
+        // Convert node values to array if saved as object/map
+        const allowedNumbers = Array.isArray(allowedData) 
+          ? allowedData 
+          : Object.values(allowedData);
+
+        const isAllowed = allowedNumbers.includes(phoneNumber);
+
+        if (!isAllowed) {
+          showMessage("Access Denied: This phone number is not on the allowed list.", true);
+          return;
+        }
+
+        // B. Send OTP if authorized
+        showMessage("Sending verification code...");
+        const appVerifier = window.recaptchaVerifier;
+        window.confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+
+        // C. Update UI for OTP entry
+        document.getElementById('phone-section').classList.add('hidden');
+        document.getElementById('otp-section').classList.remove('hidden');
+        showMessage("OTP sent successfully to " + phoneNumber);
+
+      } catch (error) {
+        console.error("Error sending OTP:", error);
+        showMessage(error.message || "Failed to send OTP.", true);
+        // Reset Recaptcha on failure
+        if (window.recaptchaVerifier) window.recaptchaVerifier.render().then(widgetId => grecaptcha.reset(widgetId));
+      }
+    }
+
+    // 4. STEP 2: Verify OTP & Automatically Register/Login
+    async function handleVerifyOTP() {
+      const otpCode = document.getElementById('otp-code').value.trim();
+      if (otpCode.length !== 6) {
+        showMessage("Please enter a valid 6-digit code.", true);
         return;
       }
 
-      firebase.auth().signInWithPhoneNumber(phone, window.recaptchaVerifier)
-        .then((result) => {
-          confirmationResult = result;
-          document.getElementById('phoneStep').classList.add('hidden');
-          document.getElementById('otpStep').classList.remove('hidden');
-        }).catch((error) => {
-          alert("Error sending OTP. Please check the phone number.");
-          console.error(error);
-        });
-    }
+      showMessage("Verifying code...");
 
-    function verifyOTP() {
-      const code = document.getElementById('otpCode').value;
-      confirmationResult.confirm(code).catch((error) => {
-        alert("Invalid OTP Code.");
-      });
-    }
+      try {
+        // A. Verify OTP
+        const result = await window.confirmationResult.confirm(otpCode);
+        const user = result.user;
 
-    function logout() {
-      firebase.auth().signOut();
-    }
+        // B. Check if this is a NEW user or existing profile
+        const userRef = db.ref(`users/${user.uid}`);
+        const userSnapshot = await userRef.once('value');
 
-    function resetAuth() {
-      document.getElementById('phoneStep').classList.remove('hidden');
-      document.getElementById('otpStep').classList.add('hidden');
-    }
-
-    // --- NAVIGATION ---
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.getElementById('tab-' + tabId).classList.remove('hidden');
-      
-      document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('bg-amber-800');
-        btn.classList.add('bg-amber-700');
-      });
-      document.querySelector(`[data-tab="${tabId}"]`).classList.replace('bg-amber-700', 'bg-amber-800');
-
-      if (tabId === 'settings') {
-        populateSettings();
-        checkAdminAccess();
-      }
-      if (tabId === 'analytics') generateAnalytics();
-    }
-
-    // --- TRACKER LOGIC ---
-    function ensurePaymentStructure() {
-      appData.schedule = toArray(appData.schedule);
-      appData.members = toArray(appData.members);
-      appData.allowedNumbers = toArray(appData.allowedNumbers);
-      appData.admins = toArray(appData.admins);
-
-      if (appData.schedule.length === 0) {
-        appData.schedule = [
-          { month: "Jul 2026", beneficiary: "Amir" },
-          { month: "Aug 2026", beneficiary: "Tahfeem 2" }
-        ];
-      }
-      if (appData.members.length === 0) {
-        appData.members = ["Amir", "Tahfeem 2", "Amardeep", "Dr. Salman", "Fatima", "Samad", "Zeeshan", "Ahsan", "Meraj", "Tahfeem"];
-      }
-
-      if (!appData.payments || typeof appData.payments !== 'object') appData.payments = {};
-
-      appData.schedule.forEach(s => {
-        if (!s || !s.month) return;
-        if (!appData.payments[s.month]) appData.payments[s.month] = {};
-        appData.members.forEach(m => {
-          if (!m) return;
-          if (!appData.payments[s.month][m]) {
-            appData.payments[s.month][m] = { paid: false, mode: 'UPI' };
-          }
-        });
-      });
-    }
-
-    function renderApp() {
-      const select = document.getElementById('monthSelect');
-      select.innerHTML = '';
-      if (!appData.schedule || appData.schedule.length === 0) return;
-
-      appData.schedule.forEach((s, i) => {
-        select.innerHTML += `<option value="${i}" data-month="${s.month}" data-ben="${s.beneficiary}">${s.month} - ${s.beneficiary}</option>`;
-      });
-
-      if (currentMonthIndex >= appData.schedule.length) {
-        currentMonthIndex = 0;
-      }
-      select.value = currentMonthIndex;
-      
-      switchMonth();
-    }
-
-    function switchMonth() {
-      const select = document.getElementById('monthSelect');
-      if (select.value !== "") {
-        currentMonthIndex = parseInt(select.value, 10);
-      }
-      if (isNaN(currentMonthIndex) || !appData.schedule[currentMonthIndex]) {
-        currentMonthIndex = 0;
-      }
-
-      const monthObj = appData.schedule[currentMonthIndex];
-      if (!monthObj) return;
-
-      const monthKey = monthObj.month;
-      
-      document.getElementById('targetAmount').value = appData.targetAmount || 0;
-      document.getElementById('actualBill').value = (appData.bills && appData.bills[monthKey]) ? appData.bills[monthKey] : 0;
-      
-      updateTrackerUI();
-      updateStats();
-    }
-
-    function updateTrackerUI() {
-      if (!appData.schedule[currentMonthIndex]) return;
-      const monthKey = appData.schedule[currentMonthIndex].month;
-      const tbody = document.getElementById('memberList');
-      tbody.innerHTML = '';
-
-      if (!appData.payments[monthKey]) appData.payments[monthKey] = {};
-
-      appData.members.forEach((m, i) => {
-        if (!appData.payments[monthKey][m]) {
-          appData.payments[monthKey][m] = { paid: false, mode: 'UPI' };
-        }
-        const pData = appData.payments[monthKey][m];
-        tbody.innerHTML += `
-          <tr class="border-b text-sm">
-            <td class="p-3 font-medium text-gray-800">${i+1}. ${m}</td>
-            <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${pData.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${pData.paid ? 'PAID' : 'PENDING'}</span></td>
-            <td class="p-3">
-              <select onchange="updateMode('${m}', this.value)" class="border rounded p-1 text-xs">
-                <option value="UPI" ${pData.mode==='UPI'?'selected':''}>UPI</option>
-                <option value="Cash" ${pData.mode==='Cash'?'selected':''}>Cash</option>
-              </select>
-            </td>
-            <td class="p-3 text-right">
-              <button onclick="togglePayment('${m}')" class="px-3 py-1 rounded text-xs text-white ${pData.paid ? 'bg-gray-400' : 'bg-emerald-600'}">${pData.paid ? 'Undo' : 'Pay'}</button>
-            </td>
-          </tr>
-        `;
-      });
-    }
-
-    function updateStats() {
-      appData.targetAmount = parseFloat(document.getElementById('targetAmount').value) || 0;
-      if (!appData.schedule[currentMonthIndex]) return;
-
-      const monthKey = appData.schedule[currentMonthIndex].month;
-      const bill = parseFloat(document.getElementById('actualBill').value) || 0;
-      if (!appData.bills) appData.bills = {};
-      appData.bills[monthKey] = bill;
-
-      const totalTarget = appData.targetAmount * appData.members.length;
-      let paidCount = 0;
-      appData.members.forEach(m => { if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) paidCount++; });
-
-      const collected = paidCount * appData.targetAmount;
-      const diff = bill > 0 ? bill - collected : 0;
-
-      document.getElementById('statTarget').innerText = `₹${totalTarget.toLocaleString('en-IN')}`;
-      document.getElementById('statCollected').innerText = `₹${collected.toLocaleString('en-IN')}`;
-      document.getElementById('statPending').innerText = `₹${(totalTarget - collected).toLocaleString('en-IN')}`;
-      document.getElementById('statDiff').innerText = `₹${Math.abs(diff).toLocaleString('en-IN')} ${diff > 0 ? '(Deficit)' : bill > 0 ? '(Surplus)' : ''}`;
-    }
-
-    function togglePayment(member) {
-      const month = appData.schedule[currentMonthIndex].month;
-      appData.payments[month][member].paid = !appData.payments[month][member].paid;
-      updateTrackerUI(); updateStats(); saveData();
-    }
-    
-    function updateMode(member, mode) {
-      const month = appData.schedule[currentMonthIndex].month;
-      appData.payments[month][member].mode = mode;
-      saveData();
-    }
-
-    // --- ANALYTICS LOGIC ---
-    function generateAnalytics() {
-      let totalCollected = 0;
-      let totalBills = 0;
-      let totalExpected = 0;
-      let memberStats = {};
-
-      const members = toArray(appData.members);
-      const schedule = toArray(appData.schedule);
-
-      members.forEach(m => memberStats[m] = { paid: 0, pending: 0, cash: 0, upi: 0 });
-
-      schedule.forEach(s => {
-        const mKey = s.month;
-        const monthExpected = appData.targetAmount * members.length;
-        totalExpected += monthExpected;
-        
-        let monthCollected = 0;
-        members.forEach(m => {
-          const p = appData.payments[mKey]?.[m] || { paid: false, mode: 'UPI' };
-          if (p.paid) {
-            monthCollected += appData.targetAmount;
-            memberStats[m].paid++;
-            p.mode === 'Cash' ? memberStats[m].cash++ : memberStats[m].upi++;
-          } else {
-            memberStats[m].pending++;
-          }
-        });
-        
-        totalCollected += monthCollected;
-        if (appData.bills && appData.bills[mKey]) totalBills += appData.bills[mKey];
-      });
-
-      const totalPossible = (appData.targetAmount || 0) * members.length * schedule.length;
-      const progress = totalPossible > 0 ? Math.round((totalCollected / totalPossible) * 100) : 0;
-      const netDiff = totalBills > 0 ? totalBills - totalCollected : 0;
-
-      document.getElementById('anaProgress').innerText = `${progress}%`;
-      document.getElementById('anaMonthsDone').innerText = `Based on ${schedule.length} scheduled cycles`;
-      document.getElementById('anaCashFlow').innerText = `₹${totalCollected.toLocaleString('en-IN')}`;
-      
-      const diffEl = document.getElementById('anaNetDiff');
-      diffEl.innerText = `₹${Math.abs(netDiff).toLocaleString('en-IN')}`;
-      if (netDiff > 0) diffEl.className = "text-3xl font-black text-red-600 mt-2";
-      else if (netDiff < 0) diffEl.className = "text-3xl font-black text-green-600 mt-2";
-
-      const tbody = document.getElementById('analyticsTableBody');
-      tbody.innerHTML = '';
-      members.forEach(m => {
-        const st = memberStats[m];
-        const prefMode = st.cash > st.upi ? 'Cash' : 'UPI';
-        tbody.innerHTML += `
-          <tr class="border-b hover:bg-gray-50">
-            <td class="p-3 font-semibold text-gray-700">${m}</td>
-            <td class="p-3 text-center font-bold text-green-600">${st.paid}</td>
-            <td class="p-3 text-center font-bold ${st.pending > 0 ? 'text-red-500' : 'text-gray-400'}">${st.pending}</td>
-            <td class="p-3 text-center text-xs text-gray-500">${prefMode}</td>
-          </tr>
-        `;
-      });
-    }
-
-    // --- SETTINGS LOGIC ---
-    function populateSettings() {
-      document.getElementById('editAdmins').value = toArray(appData.admins).join('\n');
-      document.getElementById('editPhones').value = toArray(appData.allowedNumbers).join('\n');
-      document.getElementById('editMembers').value = toArray(appData.members).join('\n');
-      document.getElementById('editSchedule').value = toArray(appData.schedule).map(s => `${s.month} = ${s.beneficiary}`).join('\n');
-    }
-
-    function saveSettings() {
-      if (!isUserAdmin()) {
-        alert("Access Denied: You must be an admin to save settings.");
-        return;
-      }
-
-      const parsePhoneList = (val) => val.split('\n').map(l => {
-        let p = l.trim();
-        if (p && !p.startsWith('+')) {
-          p = p.replace(/\D/g, '');
-          if (p.length === 10) p = '+91' + p;
-        }
-        return p;
-      }).filter(l => l);
-
-      appData.admins = parsePhoneList(document.getElementById('editAdmins').value);
-      appData.allowedNumbers = parsePhoneList(document.getElementById('editPhones').value);
-      appData.members = document.getElementById('editMembers').value.split('\n').map(m => m.trim()).filter(m => m);
-      
-      appData.schedule = document.getElementById('editSchedule').value.split('\n').map(line => {
-        const p = line.split('=');
-        if (p.length === 2) return { month: p[0].trim(), beneficiary: p[1].trim() };
-      }).filter(s => s);
-
-      ensurePaymentStructure();
-      saveData();
-      alert("Settings Saved Successfully!");
-      renderApp();
-    }
-
-    // --- SMS GENERATORS ---
-    function generateStartSMS() {
-      const schedule = toArray(appData.schedule);
-      if (!schedule[currentMonthIndex]) return;
-
-      const monthObj = schedule[currentMonthIndex];
-      const monthKey = monthObj.month;
-      const ben = monthObj.beneficiary;
-      const amount = appData.targetAmount || 0;
-
-      const monthName = monthKey.split(' ')[0];
-
-      let surplusNote = "";
-      if (currentMonthIndex > 0) {
-        const prevObj = schedule[currentMonthIndex - 1];
-        const prevMonthKey = prevObj.month;
-        const prevBen = prevObj.beneficiary;
-        const prevBill = (appData.bills && appData.bills[prevMonthKey]) || 0;
-
-        let prevPaidCount = 0;
-        if (appData.payments[prevMonthKey]) {
-          toArray(appData.members).forEach(m => {
-            if (appData.payments[prevMonthKey][m]?.paid) prevPaidCount++;
+        if (!userSnapshot.exists()) {
+          // ✨ AUTOMATIC USER SIGNUP IN REALTIME DATABASE ✨
+          await userRef.set({
+            uid: user.uid,
+            phoneNumber: user.phoneNumber,
+            role: "member",
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            status: "active"
           });
+          console.log("New user registered automatically in DB:", user.uid);
+          showMessage("Welcome! Account created successfully.");
+        } else {
+          console.log("Existing user logged in:", user.uid);
+          showMessage("Welcome back!");
         }
-        const prevCollected = prevPaidCount * amount;
 
-        if (prevBill > 0 && prevCollected > prevBill) {
-          const surplus = prevCollected - prevBill;
-          const prevTotal = amount + surplus;
-          surplusNote = `\n\n💡 Note for @${prevBen}: Since there was a surplus of ₹${surplus.toLocaleString('en-IN')} from ${prevMonthKey}, ${prevBen} should contribute ₹${prevTotal.toLocaleString('en-IN')} this month (₹${amount.toLocaleString('en-IN')} monthly contribution + ₹${surplus.toLocaleString('en-IN')} surplus).`;
-        }
+        // C. Show Authenticated View
+        showAuthenticatedUI(user);
+
+      } catch (error) {
+        console.error("Verification failed:", error);
+        showMessage("Invalid OTP code. Please try again.", true);
       }
-
-      const msg = `📢 Gold BC Update – ${monthKey}\n\n` +
-                  `Assalamu Alaikum everyone,\n\n` +
-                  `For the month of ${monthKey}, this BC belongs to ${ben}\n` +
-                  `The gold rate has been calculated and each member needs to contribute:\n\n` +
-                  `💰 ₹${amount.toLocaleString('en-IN')}${surplusNote}\n\n` +
-                  `📅 Please send your payment to ${ben} before the 15th of ${monthName}\n` +
-                  `${ben} will go to P N gadgil and sons between 15th to 20th to purchase 20 grams of 24K 999 gold and upload the proforma invoice.\n\n` +
-                  `🔁 If ${ben} chooses to take the cash equivalent instead of gold, the amount will be exactly as shown on the proforma receipt.\n\n` +
-                  `📌 Let’s ensure timely payments so everything runs smoothly.\n` +
-                  `@${ben} please update the group as we receive the payments\n\n` +
-                  `@${ben} please share your upi no if you want to recieve payments in bank account\n\n` +
-                  `JazakAllah Khair!`;
-
-      document.getElementById('smsOutput').value = msg;
     }
 
-    function generateReminderSMS() {
-      const schedule = toArray(appData.schedule);
-      if (!schedule[currentMonthIndex]) return;
-
-      const monthObj = schedule[currentMonthIndex];
-      const monthKey = monthObj.month;
-      const amount = (appData.targetAmount || 0).toLocaleString('en-IN');
+    // Show Logged-in Screen
+    function showAuthenticatedUI(user) {
+      document.getElementById('phone-section').classList.add('hidden');
+      document.getElementById('otp-section').classList.add('hidden');
+      document.getElementById('user-profile').classList.remove('hidden');
       
-      const pendingMembers = toArray(appData.members).filter(m => {
-        return !appData.payments[monthKey] || !appData.payments[monthKey][m]?.paid;
-      });
+      document.getElementById('user-uid').innerText = "UID: " + user.uid;
+      document.getElementById('user-phone').innerText = "Phone: " + user.phoneNumber;
+    }
 
-      if (pendingMembers.length === 0) {
-        document.getElementById('smsOutput').value = `🎉 All members have paid for ${monthKey}! No pending reminders.`;
-        return;
+    // Sign Out
+    function handleSignOut() {
+      auth.signOut().then(() => {
+        resetForm();
+        showMessage("Signed out successfully.");
+      });
+    }
+
+    // Reset Form to initial state
+    function resetForm() {
+      document.getElementById('phone-section').classList.remove('hidden');
+      document.getElementById('otp-section').classList.add('hidden');
+      document.getElementById('user-profile').classList.add('hidden');
+      document.getElementById('phone-number').value = '';
+      document.getElementById('otp-code').value = '';
+      document.getElementById('status-msg').classList.add('hidden');
+    }
+
+    // Listen for Auth State changes
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        showAuthenticatedUI(user);
       }
-
-      const msg = `⚠️ GOLD BC PAYMENT REMINDER\n` +
-                  `Month: ${monthKey}\n` +
-                  `Amount: ₹${amount}\n\n` +
-                  `Pending Members (${pendingMembers.length}):\n` +
-                  pendingMembers.map((m, i) => `${i + 1}. ${m}`).join('\n') + `\n\n` +
-                  `Kindly clear your payment at the earliest.`;
-
-      document.getElementById('smsOutput').value = msg;
-    }
-
-    function generateEndSMS() {
-      const schedule = toArray(appData.schedule);
-      if (!schedule[currentMonthIndex]) return;
-
-      const monthObj = schedule[currentMonthIndex];
-      const monthKey = monthObj.month;
-      const ben = monthObj.beneficiary;
-      const bill = (appData.bills && appData.bills[monthKey]) || 0;
-      const members = toArray(appData.members);
-
-      let paidCount = 0;
-      members.forEach(m => {
-        if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) paidCount++;
-      });
-      const collected = paidCount * (appData.targetAmount || 0);
-
-      const msg = `✅ GOLD BC MONTHLY SUMMARY\n` +
-                  `Month: ${monthKey}\n` +
-                  `Beneficiary: ${ben}\n` +
-                  `Total Collected: ₹${collected.toLocaleString('en-IN')} (${paidCount}/${members.length} paid)\n` +
-                  (bill > 0 ? `Actual Gold Bill: ₹${bill.toLocaleString('en-IN')}\n` : '') +
-                  `Thank you everyone!`;
-
-      document.getElementById('smsOutput').value = msg;
-    }
+    });
   </script>
 </body>
 </html>
