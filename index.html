@@ -277,7 +277,8 @@
       targetAmount: 30000,
       actualBill: 0,
       payments: {},
-      bills: {}
+      bills: {},
+      targets: {}
     };
     
     let currentMonthIndex = 0;
@@ -386,6 +387,8 @@
           if (currentUserEmail) appData.admins = [currentUserEmail];
         }
         if (!appData.bills) appData.bills = {};
+        if (!appData.targets) appData.targets = {};
+        clearSettlementCache();
 
         ensurePaymentStructure();
         renderApp();
@@ -470,13 +473,40 @@
       });
     }
 
+    // Returns the target-per-member amount that was actually in effect for a given
+    // month. Falls back to the current default (appData.targetAmount) for months
+    // that haven't had a target explicitly saved yet — but once a month has one
+    // saved, it's locked in and won't drift if the default changes later.
+    function getTargetForMonth(monthIndex) {
+      const obj = appData.schedule[monthIndex];
+      if (!obj) return appData.targetAmount || 0;
+      const key = obj.month;
+      if (appData.targets && appData.targets[key] !== undefined) return appData.targets[key];
+      return appData.targetAmount || 0;
+    }
+
     // --- SURPLUS / DEFICIT CARRY-FORWARD ---
+    // getPrevSettlement can recurse backward through the whole schedule (via
+    // getMemberDue), so results are cached per monthIndex and invalidated any
+    // time payments, bills, targets, or the schedule itself change.
+    let settlementCache = new Map();
+    function clearSettlementCache() { settlementCache = new Map(); }
+
     // Looks at the PREVIOUS month's settlement (bill vs collected) and works out
     // whether that month's beneficiary is owed a credit (deficit — they paid extra
     // out of pocket to complete the purchase) or owes an extra top-up (surplus —
     // they were collected more than the bill actually cost).
     // Returns null if there's no previous month or nothing to adjust.
     function getPrevSettlement(monthIndex) {
+      const cacheKey = String(monthIndex);
+      if (settlementCache.has(cacheKey)) return settlementCache.get(cacheKey);
+
+      const result = computeSettlement(monthIndex);
+      settlementCache.set(cacheKey, result);
+      return result;
+    }
+
+    function computeSettlement(monthIndex) {
       if (monthIndex <= 0) return null;
       const prevObj = appData.schedule[monthIndex - 1];
       if (!prevObj) return null;
@@ -487,13 +517,12 @@
 
       if (prevBill <= 0) return null; // bill not settled yet, nothing to carry forward
 
-      let prevPaidCount = 0;
+      let prevCollected = 0;
       if (appData.payments[prevMonthKey]) {
         appData.members.forEach(m => {
-          if (appData.payments[prevMonthKey][m]?.paid) prevPaidCount++;
+          if (appData.payments[prevMonthKey][m]?.paid) prevCollected += getMemberDue(monthIndex - 1, m);
         });
       }
-      const prevCollected = prevPaidCount * appData.targetAmount;
       const rawDiff = prevCollected - prevBill; // positive = surplus, negative = deficit
 
       if (rawDiff === 0) return null;
@@ -511,7 +540,7 @@
     // Amount a given member actually owes for a given month, factoring in the
     // carry-forward adjustment if they were the previous month's beneficiary.
     function getMemberDue(monthIndex, member) {
-      const base = appData.targetAmount || 0;
+      const base = getTargetForMonth(monthIndex);
       const settlement = getPrevSettlement(monthIndex);
       if (!settlement || settlement.prevBen !== member) return base;
 
@@ -544,7 +573,7 @@
 
       const monthKey = appData.schedule[currentMonthIndex].month;
       
-      document.getElementById('targetAmount').value = appData.targetAmount || 0;
+      document.getElementById('targetAmount').value = getTargetForMonth(currentMonthIndex);
       document.getElementById('actualBill').value = appData.bills[monthKey] || 0;
       
       updateAdjustmentBanner();
@@ -581,7 +610,7 @@
         }
         const pData = appData.payments[monthKey][m];
         const due = getMemberDue(currentMonthIndex, m);
-        const isAdjusted = due !== (appData.targetAmount || 0);
+        const isAdjusted = due !== getTargetForMonth(currentMonthIndex);
         tbody.innerHTML += `
           <tr class="border-b text-sm">
             <td class="p-3 font-medium text-gray-800">${i+1}. ${m}</td>
@@ -602,12 +631,19 @@
     }
 
     function updateStats() {
-      appData.targetAmount = parseFloat(document.getElementById('targetAmount').value) || 0;
       if (!appData.schedule[currentMonthIndex]) return;
-
       const monthKey = appData.schedule[currentMonthIndex].month;
+
+      const enteredTarget = parseFloat(document.getElementById('targetAmount').value) || 0;
+      if (!appData.targets) appData.targets = {};
+      appData.targets[monthKey] = enteredTarget;
+      // Keep the global default in sync too, so months that haven't been
+      // visited/saved yet inherit this as their starting value.
+      appData.targetAmount = enteredTarget;
+
       const bill = parseFloat(document.getElementById('actualBill').value) || 0;
       appData.bills[monthKey] = bill;
+      clearSettlementCache();
 
       // Total target now factors in any carried-forward adjustment for the beneficiary.
       let totalTarget = 0;
@@ -629,6 +665,7 @@
     function togglePayment(member) {
       const month = appData.schedule[currentMonthIndex].month;
       appData.payments[month][member].paid = !appData.payments[month][member].paid;
+      clearSettlementCache();
       updateTrackerUI(); 
       updateStats(); 
       saveData();
@@ -727,6 +764,7 @@
       }).filter(s => s);
 
       ensurePaymentStructure();
+      clearSettlementCache();
       saveData();
       alert("Settings Saved Successfully!");
       renderApp();
@@ -737,7 +775,7 @@
       const monthObj = appData.schedule[currentMonthIndex];
       const monthKey = monthObj.month;
       const ben = monthObj.beneficiary;
-      const baseAmount = appData.targetAmount;
+      const baseAmount = getTargetForMonth(currentMonthIndex);
       const monthName = monthKey.split(' ')[0];
 
       const settlement = getPrevSettlement(currentMonthIndex);
