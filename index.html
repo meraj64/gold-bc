@@ -18,6 +18,9 @@
 
   <!-- Chart.js for analytics graphs -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <!-- html2canvas for exporting analytics as a shareable image -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
 
@@ -131,8 +134,14 @@
 
     <!-- TAB 2: ANALYTICS -->
     <div id="tab-analytics" class="tab-content hidden space-y-6">
-      <div class="bg-white p-6 rounded-2xl shadow border">
-        <h2 class="font-bold text-xl text-gray-800 mb-6">📊 BC Lifecycle Analytics</h2>
+      <div id="analyticsCaptureArea" class="bg-white p-6 rounded-2xl shadow border">
+        <div class="flex justify-between items-center mb-6 gap-3">
+          <h2 class="font-bold text-xl text-gray-800">📊 BC Lifecycle Analytics</h2>
+          <button id="shareAnalyticsBtn" onclick="shareAnalyticsScreenshot()" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs md:text-sm font-semibold px-3 md:px-4 py-2 rounded-lg transition shrink-0">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.36 5.07L2 22l5.07-1.33C8.53 21.5 10.23 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.2 14.15c-.22.62-1.28 1.18-1.77 1.24-.45.06-1.03.09-1.66-.1-.38-.12-.87-.28-1.5-.55-2.63-1.14-4.35-3.8-4.48-3.98-.13-.18-1.07-1.42-1.07-2.71s.68-1.92.92-2.18c.24-.26.53-.33.7-.33.18 0 .35 0 .5.01.16.01.38-.06.6.46.22.53.75 1.83.82 1.96.07.13.11.29.02.47-.09.18-.13.29-.26.45-.13.15-.27.34-.39.46-.13.13-.26.27-.11.53.15.26.68 1.12 1.46 1.81 1 .89 1.85 1.17 2.11 1.3.26.13.41.11.56-.07.15-.18.65-.76.82-1.02.17-.26.34-.22.57-.13.24.09 1.5.71 1.76.84.26.13.43.19.5.3.06.11.06.62-.16 1.24z"/></svg>
+            <span id="shareBtnLabel">Share</span>
+          </button>
+        </div>
         
         <div class="grid md:grid-cols-4 gap-6 mb-8">
           <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
@@ -930,6 +939,88 @@
           }
         }
       });
+    }
+
+    // --- SHARE ANALYTICS AS IMAGE (WhatsApp / native share sheet) ---
+    async function shareAnalyticsScreenshot() {
+      const target = document.getElementById('analyticsCaptureArea');
+      const btn = document.getElementById('shareAnalyticsBtn');
+      const label = document.getElementById('shareBtnLabel');
+      if (!target || !btn) return;
+
+      if (typeof html2canvas === 'undefined') {
+        alert('Screenshot library failed to load. Check your internet connection and try again.');
+        return;
+      }
+
+      const originalLabel = label.innerText;
+      btn.disabled = true;
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+      label.innerText = 'Preparing...';
+
+      try {
+        const canvas = await html2canvas(target, {
+          backgroundColor: '#ffffff',
+          scale: window.devicePixelRatio > 1 ? 2 : 1.5,
+          useCORS: true,
+          // Never capture the share button itself into the screenshot
+          ignoreElements: (el) => el.id === 'shareAnalyticsBtn'
+        });
+
+        const monthLabel = (appData.schedule[currentMonthIndex] && appData.schedule[currentMonthIndex].month) || 'Analytics';
+        const fileName = `Gold-BC-Analytics-${monthLabel.replace(/\s+/g, '-')}.png`;
+
+        // Build a short caption from what's already on screen, so it stays in sync
+        // with whatever the user is currently looking at.
+        const progressTxt = document.getElementById('anaProgress')?.innerText || '';
+        const cashFlowTxt = document.getElementById('anaCashFlow')?.innerText || '';
+        const avgPriceTxt = document.getElementById('anaAvgGoldPrice')?.innerText || '';
+        const caption = `🪙 Gold BC Analytics\nProgress: ${progressTxt} | Collected: ${cashFlowTxt} | Avg Price: ${avgPriceTxt}/g`;
+
+        canvas.toBlob(async (blob) => {
+          resetShareButton(btn, label, originalLabel);
+          if (!blob) {
+            alert('Could not generate the screenshot. Please try again.');
+            return;
+          }
+
+          const file = new File([blob], fileName, { type: 'image/png' });
+
+          // Native share sheet with the image attached — works on Android Chrome
+          // and iOS Safari, and lists WhatsApp as one of the share targets.
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: 'Gold BC Analytics', text: caption });
+              return;
+            } catch (shareErr) {
+              if (shareErr && shareErr.name === 'AbortError') return; // user cancelled, no need to fall back
+              // fall through to download fallback below
+            }
+          }
+
+          downloadImageFallback(canvas, fileName);
+        }, 'image/png');
+      } catch (err) {
+        console.error('Screenshot error:', err);
+        resetShareButton(btn, label, originalLabel);
+        alert('Could not generate the screenshot. Please try again.');
+      }
+    }
+
+    function resetShareButton(btn, label, originalLabel) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      label.innerText = originalLabel;
+    }
+
+    function downloadImageFallback(canvas, fileName) {
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      alert('Your browser doesn\'t support direct sharing, so the image has been downloaded instead — you can attach it to WhatsApp manually from your gallery/downloads.');
     }
 
     // --- SETTINGS LOGIC ---
