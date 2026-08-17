@@ -659,7 +659,8 @@
 
       const monthName = monthKey.split(' ')[0];
 
-      let surplusNote = "";
+      // --- AUTOMATIC ADJUSTMENT CARRIED OVER FROM PREVIOUS MONTH ---
+      let adjustmentNote = "";
       if (currentMonthIndex > 0) {
         const prevObj = appData.schedule[currentMonthIndex - 1];
         const prevMonthKey = prevObj.month;
@@ -677,7 +678,13 @@
         if (prevBill > 0 && prevCollected > prevBill) {
           const surplus = prevCollected - prevBill;
           const prevTotal = amount + surplus;
-          surplusNote = `\n\n💡 Note for @${prevBen}: Since there was a surplus of ₹${surplus.toLocaleString('en-IN')} from ${prevMonthKey}, ${prevBen} should contribute ₹${prevTotal.toLocaleString('en-IN')} this month (₹${amount.toLocaleString('en-IN')} monthly contribution + ₹${surplus.toLocaleString('en-IN')} surplus).`;
+          adjustmentNote = `\n\n💡 Note for @${prevBen}: Since there was a surplus of ₹${surplus.toLocaleString('en-IN')} from ${prevMonthKey}, ${prevBen} should contribute ₹${prevTotal.toLocaleString('en-IN')} this month (₹${amount.toLocaleString('en-IN')} monthly contribution + ₹${surplus.toLocaleString('en-IN')} surplus).`;
+        } else if (prevBill > 0 && prevBill > prevCollected) {
+          const deficit = prevBill - prevCollected;
+          let prevTotal = amount - deficit;
+          if (prevTotal < 0) prevTotal = 0; // Prevents negative numbers if deficit is huge
+          
+          adjustmentNote = `\n\n💡 Note for @${prevBen}: Since there was a deficit of ₹${deficit.toLocaleString('en-IN')} from ${prevMonthKey} (which you paid out of pocket), your contribution this month is reduced to ₹${prevTotal.toLocaleString('en-IN')} (₹${amount.toLocaleString('en-IN')} standard - ₹${deficit.toLocaleString('en-IN')} reimbursement).`;
         }
       }
 
@@ -685,7 +692,7 @@
                   `Assalamu Alaikum everyone,\n\n` +
                   `For the month of ${monthKey}, this BC belongs to ${ben}\n` +
                   `The gold rate has been calculated and each member needs to contribute:\n\n` +
-                  `💰 ₹${amount.toLocaleString('en-IN')}${surplusNote}\n\n` +
+                  `💰 ₹${amount.toLocaleString('en-IN')}${adjustmentNote}\n\n` +
                   `📅 Please send your payment to ${ben} before the 15th of ${monthName}\n` +
                   `${ben} will go to P N Gadgil & Sons between 15th to 20th to purchase 20 grams of 24K 999 gold and upload the proforma invoice.\n\n` +
                   `🔁 If ${ben} chooses to take the cash equivalent instead of gold, the amount will be exactly as shown on the proforma receipt.\n\n` +
@@ -733,12 +740,25 @@
       });
       const collected = paidCount * appData.targetAmount;
 
+      // --- SURPLUS & DEFICIT LOGIC ---
+      let adjustmentNote = "";
+      if (bill > 0 && collected > bill) {
+        const surplus = collected - bill;
+        adjustmentNote = `\n\n💡 Surplus Generated: ₹${surplus.toLocaleString('en-IN')}\n` +
+                         `This extra amount remains with ${ben}. To balance the pool, ₹${surplus.toLocaleString('en-IN')} will be added to ${ben}'s standard contribution next month.`;
+      } else if (bill > 0 && bill > collected) {
+        const deficit = bill - collected;
+        adjustmentNote = `\n\n⚠️ Deficit Detected: ₹${deficit.toLocaleString('en-IN')}\n` +
+                         `${ben} paid this extra amount out of pocket. To reimburse ${ben}, their contribution for next month will be reduced by ₹${deficit.toLocaleString('en-IN')}.`;
+      }
+
       const msg = `✅ GOLD BC MONTHLY SUMMARY\n` +
                   `Month: ${monthKey}\n` +
                   `Beneficiary: ${ben}\n` +
                   `Total Collected: ₹${collected.toLocaleString('en-IN')} (${paidCount}/${appData.members.length} paid)\n` +
-                  (bill > 0 ? `Actual Gold Bill: ₹${bill.toLocaleString('en-IN')}\n` : '') +
-                  `Thank you everyone!`;
+                  (bill > 0 ? `Actual Gold Bill: ₹${bill.toLocaleString('en-IN')}` : '') +
+                  adjustmentNote +
+                  `\n\nThank you everyone!`;
 
       document.getElementById('smsOutput').value = msg;
     }
