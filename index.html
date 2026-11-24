@@ -97,7 +97,11 @@
         <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Target</p><p class="text-lg font-bold" id="statTarget">₹0</p></div>
         <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Collected</p><p class="text-lg font-bold text-green-600" id="statCollected">₹0</p></div>
         <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Pending</p><p class="text-lg font-bold text-red-500" id="statPending">₹0</p></div>
-        <div class="bg-white p-4 rounded-xl shadow border text-center"><p class="text-xs text-gray-500">Deficit / Surplus</p><p class="text-lg font-bold text-amber-600" id="statDiff">₹0</p></div>
+        <div class="bg-white p-4 rounded-xl shadow border text-center">
+          <p class="text-xs text-gray-500" id="statDiffLabel">Deficit / Surplus</p>
+          <p class="text-lg font-bold text-gray-400" id="statDiff">—</p>
+          <p class="text-[10px] text-gray-400 mt-1" id="statDiffNote"></p>
+        </div>
       </div>
 
       <div class="bg-white rounded-2xl shadow border overflow-hidden">
@@ -446,7 +450,20 @@
         clearSettlementCache();
 
         ensurePaymentStructure();
-        renderApp();
+
+        // FIX: if the user is typing in one of the number inputs, don't let the
+        // Firebase echo reset the field they're editing. Refresh everything else.
+        const activeId = document.activeElement && document.activeElement.id;
+        const typing = ['targetAmount', 'actualBill', 'gramsPurchased'].includes(activeId);
+
+        if (typing) {
+          updateAdjustmentBanner();
+          updatePriceBanner();
+          updateTrackerUI();
+          updateStats();
+        } else {
+          renderApp();
+        }
         generateAnalytics();
         checkAdminAccess();
       });
@@ -633,13 +650,14 @@
     }
 
     function switchMonth() {
-      currentMonthIndex = document.getElementById('monthSelect').value || 0;
+      currentMonthIndex = parseInt(document.getElementById('monthSelect').value, 10) || 0;
       if (!appData.schedule[currentMonthIndex]) return;
 
       const monthKey = appData.schedule[currentMonthIndex].month;
       
       document.getElementById('targetAmount').value = getTargetForMonth(currentMonthIndex);
-      document.getElementById('actualBill').value = appData.bills[monthKey] || 0;
+      // Show an empty box (not "0") when no bill has been entered yet
+      document.getElementById('actualBill').value = appData.bills[monthKey] || '';
       document.getElementById('gramsPurchased').value = appData.grams[monthKey] || '';
       
       updateAdjustmentBanner();
@@ -728,22 +746,56 @@
 
       clearSettlementCache();
       updatePriceBanner();
+      updateAdjustmentBanner();
 
-      // Total target now factors in any carried-forward adjustment for the beneficiary.
+      // Total target factors in any carried-forward adjustment for the beneficiary.
       let totalTarget = 0;
       let collected = 0;
+      let pendingCount = 0;
       appData.members.forEach(m => {
         const due = getMemberDue(currentMonthIndex, m);
         totalTarget += due;
-        if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) collected += due;
+        if (appData.payments[monthKey] && appData.payments[monthKey][m]?.paid) {
+          collected += due;
+        } else {
+          pendingCount++;
+        }
       });
-
-      const diff = bill > 0 ? bill - collected : 0;
 
       document.getElementById('statTarget').innerText = `₹${totalTarget.toLocaleString('en-IN')}`;
       document.getElementById('statCollected').innerText = `₹${collected.toLocaleString('en-IN')}`;
       document.getElementById('statPending').innerText = `₹${(totalTarget - collected).toLocaleString('en-IN')}`;
-      document.getElementById('statDiff').innerText = `₹${Math.abs(diff).toLocaleString('en-IN')} ${diff > 0 ? '(Deficit)' : bill > 0 ? '(Surplus)' : ''}`;
+
+      const diffEl = document.getElementById('statDiff');
+      const labelEl = document.getElementById('statDiffLabel');
+      const noteEl = document.getElementById('statDiffNote');
+
+      // No bill yet -> neutral state, nothing to compare against
+      if (bill <= 0) {
+        labelEl.innerText = 'Deficit / Surplus';
+        diffEl.innerText = '—';
+        diffEl.className = 'text-lg font-bold text-gray-400';
+        noteEl.innerText = 'Enter the actual gold bill';
+        return;
+      }
+
+      const diff = collected - bill; // + surplus, - deficit
+      if (diff > 0) {
+        labelEl.innerText = 'Surplus';
+        diffEl.innerText = `₹${diff.toLocaleString('en-IN')}`;
+        diffEl.className = 'text-lg font-bold text-green-600';
+      } else if (diff < 0) {
+        labelEl.innerText = 'Deficit';
+        diffEl.innerText = `₹${Math.abs(diff).toLocaleString('en-IN')}`;
+        diffEl.className = 'text-lg font-bold text-red-600';
+      } else {
+        labelEl.innerText = 'Settled';
+        diffEl.innerText = '₹0';
+        diffEl.className = 'text-lg font-bold text-emerald-600';
+      }
+      noteEl.innerText = pendingCount > 0
+        ? `Provisional – ${pendingCount} member(s) still pending`
+        : "Carries to next month's beneficiary adjustment";
     }
 
     function togglePayment(member) {
@@ -767,6 +819,7 @@
     function generateAnalytics() {
       let totalCollected = 0;
       let totalBills = 0;
+      let settledCollected = 0; // collected only in months that have a bill
       let totalExpected = 0;
       let totalGramsWeighted = 0; // sum of bills across months that have a valid price
       let totalGrams = 0;
@@ -797,7 +850,12 @@
         });
         totalExpected += monthExpected;
         totalCollected += monthCollected;
-        if (appData.bills[mKey]) totalBills += appData.bills[mKey];
+
+        // Only compare bills against collections from the same (settled) months
+        if (appData.bills[mKey] > 0) {
+          totalBills += appData.bills[mKey];
+          settledCollected += monthCollected;
+        }
 
         const price = getPricePerGram(idx);
         if (price !== null) {
@@ -810,7 +868,7 @@
       });
 
       const progress = Math.round((totalCollected / totalExpected) * 100) || 0;
-      const netDiff = totalBills > 0 ? totalBills - totalCollected : 0;
+      const netDiff = totalBills - settledCollected; // + deficit, - surplus
       const avgPrice = totalGrams > 0 ? totalGramsWeighted / totalGrams : 0;
 
       document.getElementById('anaProgress').innerText = `${progress}%`;
@@ -824,9 +882,9 @@
       renderGoldPriceInsights(priceLabels, priceValues, totalGrams);
       
       const diffEl = document.getElementById('anaNetDiff');
-      diffEl.innerText = `₹${Math.abs(netDiff).toLocaleString('en-IN')}`;
-      if (netDiff > 0) diffEl.className = "text-3xl font-black text-red-600 mt-2";
-      else if (netDiff < 0) diffEl.className = "text-3xl font-black text-green-600 mt-2";
+      diffEl.innerText = `₹${Math.abs(netDiff).toLocaleString('en-IN')}${netDiff > 0 ? ' (Deficit)' : netDiff < 0 ? ' (Surplus)' : ''}`;
+      diffEl.className = 'text-3xl font-black mt-2 ' +
+        (netDiff > 0 ? 'text-red-600' : netDiff < 0 ? 'text-green-600' : 'text-purple-900');
 
       const tbody = document.getElementById('analyticsTableBody');
       tbody.innerHTML = '';
