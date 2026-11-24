@@ -621,10 +621,24 @@
 
     // Amount a given member actually owes for a given month, factoring in the
     // carry-forward adjustment if they were the previous month's beneficiary.
+    // Normalizes a name so "Salman", "salman" and "Dr. Salman" all compare as equal.
+    // (Schedule beneficiary names and member names are typed separately, so they
+    // don't always match exactly.) "Tahfeem" and "Tahfeem 2" stay different.
+    function normalizeName(n) {
+      return String(n || '')
+        .toLowerCase()
+        .replace(/\b(dr|mr|mrs|ms)\.?\s+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    function isSameMember(a, b) {
+      return a === b || normalizeName(a) === normalizeName(b);
+    }
+
     function getMemberDue(monthIndex, member) {
       const base = getTargetForMonth(monthIndex);
       const settlement = getPrevSettlement(monthIndex);
-      if (!settlement || settlement.prevBen !== member) return base;
+      if (!settlement || !isSameMember(settlement.prevBen, member)) return base;
 
       if (settlement.type === 'surplus') {
         // They were given more cash than the bill needed — they owe that extra back.
